@@ -1,0 +1,10 @@
+[server]
+# PDFs de revista e livro passam fácil dos 200 MB padrão.
+maxUploadSize = 400
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "light"
+primaryColor = "#C1443C"

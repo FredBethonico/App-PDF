@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.pdf
+*.zip
+!tests/**/*.pdf
+.DS_Store
+
+# Anotações internas nossas — não vão para o GitHub.
+README.md
