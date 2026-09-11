@@ -212,6 +212,56 @@ def main() -> int:
     _, vazias_raster = pt.extrair_texto(raster)
     checar("detecta PDF sem camada de texto", vazias_raster == 6, f"{vazias_raster}")
 
+    secao("Redimensionar imagens")
+
+    def imagem_bytes(img, formato, **kw):
+        buffer = io.BytesIO()
+        img.save(buffer, formato, **kw)
+        return buffer.getvalue()
+
+    def medir(dados):
+        with Image.open(io.BytesIO(dados)) as img:
+            return img.size, img.mode
+
+    deitada_alfa = imagem_bytes(Image.new("RGBA", (1200, 800), (255, 0, 0, 128)), "PNG")
+    em_pe = imagem_bytes(Image.new("RGB", (800, 1200), (0, 128, 255)), "JPEG")
+    exif = Image.Exif()
+    exif[0x0112] = 6  # celular: gravada deitada, com ordem de girar 90°
+    celular = imagem_bytes(Image.new("RGB", (1200, 800), "green"), "JPEG", exif=exif)
+
+    feitas, falhas = pt.redimensionar_lote(
+        [("a.png", deitada_alfa), ("b.jpg", em_pe), ("c.jpg", celular)],
+        modo="exato", largura=500, altura=500,
+    )
+    checar("lote no tamanho exato", [medir(d)[0] for _, d in feitas] == [(500, 500)] * 3)
+    checar("nomes com o tamanho", [n for n, _ in feitas] == ["a-500x500.png", "b-500x500.jpg",
+                                                          "c-500x500.jpg"], str([n for n, _ in feitas]))
+    checar("PNG continua com transparência", medir(feitas[0][1])[1] == "RGBA")
+
+    _, _, tamanho = pt.redimensionar_imagem(deitada_alfa, modo="largura", largura=600)
+    checar("só a largura mantém proporção", tamanho == (600, 400), str(tamanho))
+    _, _, tamanho = pt.redimensionar_imagem(em_pe, modo="lado_maior", lado=600)
+    checar("lado maior em foto em pé", tamanho == (400, 600), str(tamanho))
+    _, _, tamanho = pt.redimensionar_imagem(em_pe, modo="lado_maior", lado=5000, nao_ampliar=True)
+    checar("não amplia quando pedido", tamanho == (800, 1200), str(tamanho))
+    checar("lê o giro do celular", pt.dimensoes_imagem(celular) == (800, 1200))
+    _, _, tamanho = pt.redimensionar_imagem(celular, modo="largura", largura=400)
+    checar("foto de celular sai em pé", tamanho == (400, 600), str(tamanho))
+
+    com_fundo, _, _ = pt.redimensionar_imagem(deitada_alfa, modo="exato", largura=400,
+                                               altura=400, encaixe="fundo", transparente=True)
+    with Image.open(io.BytesIO(com_fundo)) as img:
+        checar("faixa de fundo transparente", img.getpixel((200, 3))[3] == 0)
+    como_jpeg, extensao, _ = pt.redimensionar_imagem(deitada_alfa, modo="largura", largura=300,
+                                                      formato="JPEG")
+    checar("PNG com alfa vira JPEG", extensao == ".jpg" and medir(como_jpeg)[1] == "RGB")
+
+    feitas, falhas = pt.redimensionar_lote(
+        [("boa.png", deitada_alfa), ("quebrada.png", b"lixo")], modo="largura", largura=100
+    )
+    checar("arquivo quebrado não derruba o lote", len(feitas) == 1 and len(falhas) == 1,
+           falhas[0][:40] if falhas else "")
+
     secao("Utilidades")
     pacote = pt.zipar([("a.pdf", base), ("a.pdf", recorte)])
     import zipfile
@@ -230,6 +280,10 @@ def main() -> int:
         ("marca sem texto", lambda: pt.marca_dagua_texto(base, "   ")),
         ("formato sem {n}", lambda: pt.numerar_paginas(base, formato="fixo")),
         ("proteger sem senha", lambda: pt.proteger(base)),
+        ("redimensionar sem altura",
+         lambda: pt.redimensionar_lote([("a.png", b"x")], modo="exato", largura=10)),
+        ("redimensionar acima do limite",
+         lambda: pt.redimensionar_lote([("a.png", b"x")], modo="largura", largura=99999)),
     ]:
         try:
             funcao()

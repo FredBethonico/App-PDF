@@ -37,6 +37,7 @@ FERRAMENTAS = [
     ("🖼️", "PDF para imagens", "Cada página vira um PNG ou JPEG."),
     ("📄", "Imagens para PDF", "Fotos e prints viram um PDF só."),
     ("📝", "Extrair texto", "Copia o conteúdo escrito para um .txt."),
+    ("📐", "Redimensionar imagens", "Várias imagens de uma vez, no tamanho em pixels que você digitar."),
     ("💧", "Marca d'água", "Carimba um texto ou logo nas páginas."),
     ("🔢", "Numerar páginas", "Números no rodapé ou no cabeçalho."),
     ("🔒", "Proteger", "Coloca senha e define o que os outros podem fazer."),
@@ -126,6 +127,9 @@ navegacao = st.navigation(
             st.Page(ui.tela_pdf_para_imagens, title="PDF para imagens", icon="🖼️"),
             st.Page(ui.tela_imagens_para_pdf, title="Imagens para PDF", icon="📄"),
             st.Page(ui.tela_texto, title="Extrair texto", icon="📝"),
+        ],
+        "Imagens": [
+            st.Page(ui.tela_redimensionar, title="Redimensionar imagens", icon="📐"),
         ],
         "Marcar": [
             st.Page(ui.tela_marca_dagua, title="Marca d'água", icon="💧"),

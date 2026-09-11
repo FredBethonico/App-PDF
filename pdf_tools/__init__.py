@@ -48,6 +48,13 @@ from .paginas import (
     remover,
 )
 from .ranges import ErroDeIntervalo, formatar_intervalo, parse_intervalo
+from .redimensionar import (
+    LADO_MAXIMO,
+    dimensoes_imagem,
+    redimensionar_imagem,
+    redimensionar_lote,
+    tamanho_redimensionado,
+)
 from .texto import extrair_texto
 from .util import (
     nome_base,
@@ -63,6 +70,7 @@ __all__ = [
     "FONTES",
     "FORMATOS_ENTRADA",
     "Info",
+    "LADO_MAXIMO",
     "NIVEIS",
     "POSICOES",
     "PdfInvalido",
@@ -72,6 +80,7 @@ __all__ = [
     "comprimir_imagens",
     "contar_paginas",
     "desbloquear",
+    "dimensoes_imagem",
     "diagnostico",
     "dividir_em_blocos",
     "dividir_em_partes",
@@ -95,9 +104,12 @@ __all__ = [
     "precisa_de_senha",
     "proteger",
     "rasterizar",
+    "redimensionar_imagem",
+    "redimensionar_lote",
     "remover",
     "renderizar_pagina",
     "sufixar",
+    "tamanho_redimensionado",
     "tamanho_legivel",
     "variacao_percentual",
     "zipar",

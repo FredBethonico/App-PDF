@@ -237,6 +237,40 @@ def main() -> int:
                                            intervalo="1", com_cabecalho=False)
             checar("texto da marca está no PDF", "CONFIDENCIAL" in conteudo)
 
+    print("\nRedimensionar imagens (lote)")
+    em_pe = io.BytesIO()
+    Image.new("RGB", (300, 500), (20, 160, 90)).save(em_pe, "JPEG")
+    lote = {"imagens": [("azul.png", imagem_png()), ("vermelha.png", imagem_png((200, 60, 60))),
+                        ("em-pe.jpg", em_pe.getvalue())]}
+
+    app = rodar("tela_redimensionar", lote)
+    if sem_excecao(app, "redimensionar abre"):
+        checar("prévia antes/depois", len(app.get("image")) >= 2,
+               f"{len(app.get('image'))} imagens")
+        app.number_input(key="redim_largura").set_value(320).run()
+        app.number_input(key="redim_altura").set_value(240).run()
+        checar("antecipa o tamanho final",
+               any("320 × 240" in i.value for i in app.info),
+               " | ".join(i.value for i in app.info)[:80])
+        app = clicar(app, "Redimensionar")
+        prontos = resultado(app, "redim")
+        checar("devolve as três", len(prontos) == 3 and len(downloads(app)) >= 1, erros(app))
+        tamanhos = [Image.open(io.BytesIO(d)).size for _, d in prontos]
+        checar("todas em 320 × 240", tamanhos == [(320, 240)] * 3, str(tamanhos))
+        checar("nome traz o tamanho", all("-320x240." in n for n, _ in prontos),
+               str([n for n, _ in prontos]))
+        app.number_input(key="redim_largura").set_value(100).run()
+        checar("mudar o tamanho esconde o resultado antigo", len(downloads(app)) == 0)
+
+    app = rodar("tela_redimensionar", lote)
+    if sem_excecao(app, "modo lado maior"):
+        app.radio(key="redim_modo").set_value("Lado maior").run()
+        app.number_input(key="redim_lado").set_value(250).run()
+        app = clicar(app, "Redimensionar")
+        tamanhos = [Image.open(io.BytesIO(d)).size for _, d in resultado(app, "redim")]
+        checar("lado maior respeita a proporção de cada uma",
+               tamanhos == [(250, 167), (250, 167), (150, 250)], str(tamanhos))
+
     print()
     if FALHAS:
         print(f"{len(FALHAS)} falha(s): {', '.join(FALHAS)}")
