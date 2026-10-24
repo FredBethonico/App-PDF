@@ -53,6 +53,12 @@ def _uploader_falso(rotulo, *args, accept_multiple_files=False, **kwargs):
 
 st.file_uploader = _uploader_falso
 
+if os.environ.get("HARNESS_INSTAGRAM"):
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import instagram_falso  # noqa: E402
+
+    instagram_falso.instalar()
+
 import interface as ui  # noqa: E402
 
 getattr(ui, os.environ["HARNESS_TELA"])()

@@ -38,6 +38,7 @@ FERRAMENTAS = [
     ("📄", "Imagens para PDF", "Fotos e prints viram um PDF só."),
     ("📝", "Extrair texto", "Copia o conteúdo escrito para um .txt."),
     ("📐", "Redimensionar imagens", "Várias imagens de uma vez, no tamanho em pixels que você digitar."),
+    ("📸", "Baixar do Instagram", "Fotos, vídeos e carrosséis de posts públicos, pelo link."),
     ("💧", "Marca d'água", "Carimba um texto ou logo nas páginas."),
     ("🔢", "Numerar páginas", "Números no rodapé ou no cabeçalho."),
     ("🔒", "Proteger", "Coloca senha e define o que os outros podem fazer."),
@@ -130,6 +131,9 @@ navegacao = st.navigation(
         ],
         "Imagens": [
             st.Page(ui.tela_redimensionar, title="Redimensionar imagens", icon="📐"),
+        ],
+        "Internet": [
+            st.Page(ui.tela_instagram, title="Baixar do Instagram", icon="📸"),
         ],
         "Marcar": [
             st.Page(ui.tela_marca_dagua, title="Marca d'água", icon="💧"),

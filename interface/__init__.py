@@ -5,6 +5,7 @@ Toda a lógica de PDF vive em `pdf_tools`; aqui só tem widget e mensagem.
 """
 
 from .telas_imagens import tela_redimensionar
+from .telas_instagram import tela_instagram
 from .telas_converter import (
     tela_comprimir,
     tela_imagens_para_pdf,
@@ -22,6 +23,7 @@ __all__ = [
     "tela_extrair",
     "tela_imagens_para_pdf",
     "tela_informacoes",
+    "tela_instagram",
     "tela_juntar",
     "tela_marca_dagua",
     "tela_numerar",

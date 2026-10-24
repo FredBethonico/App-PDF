@@ -271,6 +271,36 @@ def main() -> int:
         checar("lado maior respeita a proporção de cada uma",
                tamanhos == [(250, 167), (250, 167), (150, 250)], str(tamanhos))
 
+    print("\nBaixar do Instagram (rede simulada)")
+    os.environ["HARNESS_INSTAGRAM"] = "1"
+    app = rodar("tela_instagram", {})
+    if sem_excecao(app, "instagram abre"):
+        # Campo dentro de formulário: o valor só vale junto com o clique no botão.
+        app.text_input(key="insta_link").set_value("https://www.instagram.com/p/CARROSSEL1/?igsh=xyz")
+        app = clicar(app, "Buscar e baixar")
+        prontos = resultado(app, "insta")
+        checar("baixa o carrossel inteiro", len(prontos) == 3 and len(downloads(app)) >= 1,
+               erros(app))
+        checar("prévia das fotos", len(app.get("image")) >= 2, f"{len(app.get('image'))} imagens")
+        checar("resumo com o autor", any("@fulano" in s.value for s in app.success),
+               " | ".join(s.value for s in app.success))
+        app.text_input(key="insta_link").set_value("https://www.instagram.com/p/FOTO123456/")
+        app = clicar(app, "Buscar e baixar")
+        checar("outro link troca o resultado",
+               [n for n, _ in resultado(app, "insta")] == ["beltrana-FOTO123456.jpg"],
+               str([n for n, _ in resultado(app, "insta")]))
+
+    app = rodar("tela_instagram", {})
+    if sem_excecao(app, "instagram com erro"):
+        app.text_input(key="insta_link").set_value("https://www.instagram.com/fulano/")
+        app = clicar(app, "Buscar e baixar")
+        checar("link de perfil vira aviso", "perfil" in erros(app) and not downloads(app),
+               erros(app))
+        app.text_input(key="insta_link").set_value("instagram.com/p/LIMITE1234")
+        app = clicar(app, "Buscar e baixar")
+        checar("bloqueio do Instagram vira aviso", "limitando" in erros(app), erros(app))
+    os.environ.pop("HARNESS_INSTAGRAM", None)
+
     print()
     if FALHAS:
         print(f"{len(FALHAS)} falha(s): {', '.join(FALHAS)}")
