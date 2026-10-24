@@ -262,6 +262,68 @@ def main() -> int:
     checar("arquivo quebrado não derruba o lote", len(feitas) == 1 and len(falhas) == 1,
            falhas[0][:40] if falhas else "")
 
+    secao("Instagram (rede simulada)")
+    import instagram_falso
+    import pdf_tools.instagram as ig
+
+    for link, esperado in [
+        ("https://www.instagram.com/p/CARROSSEL1/?igsh=abc", "CARROSSEL1"),
+        ("instagram.com/reel/REEL123456", "REEL123456"),
+        ("https://www.instagram.com/reels/REEL123456/", "REEL123456"),
+        ("https://m.instagram.com/fulano/p/FOTO123456/", "FOTO123456"),
+        ("https://instagr.am/tv/Ab-c_12345", "Ab-c_12345"),
+    ]:
+        checar(f"entende {link[:38]}", pt.extrair_shortcode(link) == esperado)
+    for link, trecho in [
+        ("", "Cole o link"),
+        ("https://youtube.com/watch?v=x", "não é do Instagram"),
+        ("https://www.instagram.com/stories/fulano/123/", "Stories"),
+        ("https://www.instagram.com/fulano/", "perfil"),
+    ]:
+        try:
+            pt.extrair_shortcode(link)
+            checar(f"recusa {link or 'vazio'}", False, "não levantou erro")
+        except pt.ErroInstagram as erro:
+            checar(f"recusa {link or 'vazio'}", trecho in str(erro), str(erro)[:60])
+
+    checar("extensão JPEG", ig.extensao(instagram_falso.jpeg(), False) == ".jpg")
+    checar("extensão WEBP num link .jpg", ig.extensao(instagram_falso.webp(), False) == ".webp")
+    checar("extensão MP4", ig.extensao(instagram_falso.MP4, True) == ".mp4")
+
+    logado = ig._novo_loader({"sessionid": "abc", "usuario": "teste"})
+    checar("sessão só com sessionid carrega", logado.context.is_logged_in)
+    checar("sem sessão fica anônimo", not ig._novo_loader(None).context.is_logged_in)
+    try:
+        ig._SemEspera(logado.context).sleep(600)
+        checar("não dorme minutos no limite", False, "dormiu")
+    except pt.ErroInstagram as erro:
+        checar("não dorme minutos no limite", True, str(erro)[:50])
+
+    instagram_falso.instalar()
+    post = pt.ler_post("https://www.instagram.com/p/CARROSSEL1/")
+    checar("carrossel com 3 itens", len(post.midias) == 3 and (post.fotos, post.videos) == (2, 1))
+    feitos, falhas = pt.baixar_midias(post)
+    checar("nomes do carrossel", [n for n, _ in feitos] == [
+        "fulano-CARROSSEL1-01.jpg", "fulano-CARROSSEL1-02.mp4", "fulano-CARROSSEL1-03.webp"
+    ], str([n for n, _ in feitos]))
+    feitos, _ = pt.baixar_midias(pt.ler_post("instagram.com/reel/REEL123456"))
+    checar("reel baixa o vídeo, não a capa", [n for n, _ in feitos] == ["fulano-REEL123456.mp4"],
+           str([n for n, _ in feitos]))
+    feitos, falhas = pt.baixar_midias(pt.ler_post("instagram.com/p/MEIOQUEBRADO"))
+    checar("item quebrado não derruba o carrossel", len(feitos) == 1 and len(falhas) == 1,
+           falhas[0] if falhas else "")
+    for shortcode, trecho in [
+        ("SUMIU12345", "não entregou"),
+        ("LIMITE1234", "limitando"),
+        ("LOGIN12345", "login"),
+        ("MUDOU12345", "formato"),
+    ]:
+        try:
+            pt.ler_post(f"instagram.com/p/{shortcode}")
+            checar(f"erro amigável {shortcode}", False, "não levantou erro")
+        except pt.ErroInstagram as erro:
+            checar(f"erro amigável {shortcode}", trecho in str(erro), str(erro)[:60])
+
     secao("Utilidades")
     pacote = pt.zipar([("a.pdf", base), ("a.pdf", recorte)])
     import zipfile

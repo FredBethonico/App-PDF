@@ -30,6 +30,13 @@ from .imagens import (
     pdf_para_imagens,
     renderizar_pagina,
 )
+from .instagram import (
+    LIMITE_POR_ARQUIVO,
+    ErroInstagram,
+    baixar_midias,
+    extrair_shortcode,
+    ler_post,
+)
 from .marcas import (
     FONTES,
     POSICOES,
@@ -67,15 +74,18 @@ from .util import (
 
 __all__ = [
     "ErroDeIntervalo",
+    "ErroInstagram",
     "FONTES",
     "FORMATOS_ENTRADA",
     "Info",
     "LADO_MAXIMO",
+    "LIMITE_POR_ARQUIVO",
     "NIVEIS",
     "POSICOES",
     "PdfInvalido",
     "PdfProtegido",
     "TAMANHOS_PAGINA",
+    "baixar_midias",
     "comprimir_estrutura",
     "comprimir_imagens",
     "contar_paginas",
@@ -86,12 +96,14 @@ __all__ = [
     "dividir_em_partes",
     "dividir_por_intervalos",
     "extrair",
+    "extrair_shortcode",
     "extrair_texto",
     "formatar_intervalo",
     "girar_tudo",
     "imagens_para_pdf",
     "inspecionar",
     "juntar",
+    "ler_post",
     "marca_dagua_imagem",
     "marca_dagua_texto",
     "miniaturas",

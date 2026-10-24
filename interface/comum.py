@@ -251,6 +251,7 @@ def _tipo(nome: str) -> str:
         "jpeg": "image/jpeg",
         "webp": "image/webp",
         "txt": "text/plain",
+        "mp4": "video/mp4",
         "zip": "application/zip",
     }.get(fim, "application/octet-stream")
 
