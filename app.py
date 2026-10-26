@@ -39,6 +39,7 @@ FERRAMENTAS = [
     ("📝", "Extrair texto", "Copia o conteúdo escrito para um .txt."),
     ("📐", "Redimensionar imagens", "Várias imagens de uma vez, no tamanho em pixels que você digitar."),
     ("📸", "Baixar do Instagram", "Fotos, vídeos e carrosséis de posts públicos, pelo link."),
+    ("🎵", "MP4 para MP3", "Tira o som de vídeos e salva como MP3, inteiro ou só um trecho."),
     ("💧", "Marca d'água", "Carimba um texto ou logo nas páginas."),
     ("🔢", "Numerar páginas", "Números no rodapé ou no cabeçalho."),
     ("🔒", "Proteger", "Coloca senha e define o que os outros podem fazer."),
@@ -134,6 +135,9 @@ navegacao = st.navigation(
         ],
         "Internet": [
             st.Page(ui.tela_instagram, title="Baixar do Instagram", icon="📸"),
+        ],
+        "Áudio e vídeo": [
+            st.Page(ui.tela_mp4_para_mp3, title="MP4 para MP3", icon="🎵"),
         ],
         "Marcar": [
             st.Page(ui.tela_marca_dagua, title="Marca d'água", icon="💧"),
