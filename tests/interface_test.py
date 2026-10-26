@@ -19,7 +19,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 from PIL import Image
 from streamlit.testing.v1 import AppTest
 
-from smoke import pdf_exemplo
+from smoke import pdf_exemplo, video_exemplo
 
 HARNESS = str(Path(__file__).with_name("harness.py"))
 FALHAS: list[str] = []
@@ -270,6 +270,42 @@ def main() -> int:
         tamanhos = [Image.open(io.BytesIO(d)).size for _, d in resultado(app, "redim")]
         checar("lado maior respeita a proporção de cada uma",
                tamanhos == [(250, 167), (250, 167), (150, 250)], str(tamanhos))
+
+    print("\nMP4 para MP3")
+    import av
+
+    def duracao_mp3(dados: bytes) -> float:
+        with av.open(io.BytesIO(dados)) as c:
+            return c.duration / av.time_base
+
+    video = video_exemplo(segundos=4)
+    app = rodar("tela_mp4_para_mp3", {"videos": [("aula.mp4", video)]})
+    if sem_excecao(app, "mp3 abre"):
+        checar("mostra a duração", any("0:04" in c.value for c in app.caption),
+               " | ".join(c.value for c in app.caption)[:100])
+        checar("estima o tamanho", any("Tamanho estimado" in i.value for i in app.info))
+        app.text_input(key="mp3_inicio").set_value("0:01").run()
+        app.text_input(key="mp3_fim").set_value("3").run()
+        app = clicar(app, "Converter para MP3")
+        prontos = resultado(app, "mp3")
+        checar("gera o MP3", [n for n, _ in prontos] == ["aula.mp3"] and len(downloads(app)) >= 1,
+               erros(app))
+        if prontos:
+            checar("respeita o trecho", abs(duracao_mp3(prontos[0][1]) - 2) < 0.15,
+                   f"{duracao_mp3(prontos[0][1]):.2f}s")
+        checar("player para ouvir", len(app.get("audio")) == 1)
+        app.text_input(key="mp3_fim").set_value("abc").run()
+        checar("tempo ilegível vira aviso", "Não entendi" in erros(app), erros(app))
+
+    lote_videos = {"videos": [("um.mp4", video), ("dois.mov", video_exemplo(2)),
+                              ("mudo.mp4", video_exemplo(1, com_audio=False))]}
+    app = rodar("tela_mp4_para_mp3", lote_videos)
+    if sem_excecao(app, "mp3 em lote"):
+        checar("avisa do vídeo sem som", any("mudo.mp4" in w.value for w in app.warning))
+        app.selectbox(key="mp3_qualidade").set_value("Normal — 128 kbps").run()
+        app = clicar(app, "Converter 2 vídeos")
+        checar("lote vira dois MP3", [n for n, _ in resultado(app, "mp3")] == ["um.mp3", "dois.mp3"],
+               str([n for n, _ in resultado(app, "mp3")]) + erros(app))
 
     print("\nBaixar do Instagram (rede simulada)")
     os.environ["HARNESS_INSTAGRAM"] = "1"

@@ -5,6 +5,16 @@ devolve o conteúdo do resultado. Nada toca no disco e nada importa Streamlit,
 então dá para usar em script, notebook ou testes do mesmo jeito.
 """
 
+from .audio import (
+    BITRATES,
+    FORMATOS_VIDEO,
+    InfoAudio,
+    converter_lote,
+    converter_para_mp3,
+    formatar_tempo,
+    info_audio,
+    ler_tempo,
+)
 from .comprimir import (
     NIVEIS,
     comprimir_estrutura,
@@ -73,11 +83,14 @@ from .util import (
 )
 
 __all__ = [
+    "BITRATES",
     "ErroDeIntervalo",
     "ErroInstagram",
     "FONTES",
     "FORMATOS_ENTRADA",
+    "FORMATOS_VIDEO",
     "Info",
+    "InfoAudio",
     "LADO_MAXIMO",
     "LIMITE_POR_ARQUIVO",
     "NIVEIS",
@@ -89,6 +102,8 @@ __all__ = [
     "comprimir_estrutura",
     "comprimir_imagens",
     "contar_paginas",
+    "converter_lote",
+    "converter_para_mp3",
     "desbloquear",
     "dimensoes_imagem",
     "diagnostico",
@@ -99,11 +114,14 @@ __all__ = [
     "extrair_shortcode",
     "extrair_texto",
     "formatar_intervalo",
+    "formatar_tempo",
     "girar_tudo",
     "imagens_para_pdf",
+    "info_audio",
     "inspecionar",
     "juntar",
     "ler_post",
+    "ler_tempo",
     "marca_dagua_imagem",
     "marca_dagua_texto",
     "miniaturas",

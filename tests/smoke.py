@@ -67,6 +67,41 @@ def pdf_exemplo(paginas: int = 6, com_imagem: bool = True) -> bytes:
     return buffer.getvalue()
 
 
+def video_exemplo(segundos: float = 3, com_audio: bool = True, taxa: int = 44100) -> bytes:
+    """MP4 de verdade, feito na hora: tela preta e um tom de 440 Hz em estéreo."""
+    import math
+
+    import av
+    import numpy as np
+
+    buffer = io.BytesIO()
+    with av.open(buffer, "w", format="mp4") as saida:
+        video = saida.add_stream("mpeg4", rate=10)
+        video.width, video.height, video.pix_fmt = 64, 48, "yuv420p"
+        audio = None
+        if com_audio:
+            audio = saida.add_stream("aac", rate=taxa)
+            audio.layout = "stereo"
+        for indice in range(int(segundos * 10)):
+            quadro = av.VideoFrame.from_ndarray(np.zeros((48, 64, 3), np.uint8), format="rgb24")
+            quadro.pts = indice
+            for pacote in video.encode(quadro):
+                saida.mux(pacote)
+        amostra = 0
+        while audio is not None and amostra < taxa * segundos:
+            tempo = (np.arange(1024) + amostra) / taxa
+            onda = (0.3 * np.sin(2 * math.pi * 440 * tempo)).astype(np.float32)
+            quadro = av.AudioFrame.from_ndarray(np.stack([onda, onda]), format="fltp", layout="stereo")
+            quadro.sample_rate, quadro.pts = taxa, amostra
+            for pacote in audio.encode(quadro):
+                saida.mux(pacote)
+            amostra += 1024
+        for fluxo in (video, audio):
+            for pacote in fluxo.encode(None) if fluxo else ():
+                saida.mux(pacote)
+    return buffer.getvalue()
+
+
 def secao(titulo: str) -> None:
     print(f"\n{titulo}")
 
@@ -262,6 +297,45 @@ def main() -> int:
     checar("arquivo quebrado não derruba o lote", len(feitas) == 1 and len(falhas) == 1,
            falhas[0][:40] if falhas else "")
 
+    secao("MP4 para MP3")
+    import av
+
+    def ler_mp3(dados):
+        with av.open(io.BytesIO(dados)) as c:
+            faixa = c.streams.audio[0]
+            return c.format.name, faixa.codec_context.channels, c.duration / av.time_base, c.bit_rate
+
+    video = video_exemplo(segundos=4)
+    info = pt.info_audio(video)
+    checar("lê duração do vídeo", abs(info.duracao - 4) < 0.2, f"{info.duracao:.2f}s")
+    checar("lê canais e taxa", (info.canais, info.taxa) == (2, 44100), f"{info.canais}, {info.taxa}")
+    formato, canais, duracao, _ = ler_mp3(pt.converter_para_mp3(video))
+    checar("sai MP3 estéreo", formato == "mp3" and canais == 2, f"{formato}, {canais}")
+    checar("mantém a duração", abs(duracao - 4) < 0.2, f"{duracao:.2f}s")
+    _, canais, _, _ = ler_mp3(pt.converter_para_mp3(video, mono=True))
+    checar("mono mistura os canais", canais == 1)
+    leve = pt.converter_para_mp3(video, bitrate=128)
+    pesado = pt.converter_para_mp3(video, bitrate=320)
+    checar("320 kbps maior que 128", len(pesado) > len(leve) * 2,
+           f"{pt.tamanho_legivel(len(leve))} x {pt.tamanho_legivel(len(pesado))}")
+    _, _, duracao, _ = ler_mp3(pt.converter_para_mp3(video, inicio=1, fim=2.5))
+    checar("corta o trecho", abs(duracao - 1.5) < 0.15, f"{duracao:.2f}s")
+    _, _, duracao, _ = ler_mp3(pt.converter_para_mp3(video, inicio=3))
+    checar("do meio até o fim", abs(duracao - 1) < 0.15, f"{duracao:.2f}s")
+    _, _, duracao, _ = ler_mp3(pt.converter_para_mp3(video_exemplo(2, taxa=96000)))
+    checar("taxa fora do MP3 é reamostrada", abs(duracao - 2) < 0.2, f"{duracao:.2f}s")
+    checar("tempo 1:02:03", pt.ler_tempo("1:02:03") == 3723)
+    checar("tempo com vírgula", pt.ler_tempo("1:30,5") == 90.5)
+    checar("tempo em branco", pt.ler_tempo(" ") is None)
+    checar("formata tempo", pt.formatar_tempo(83.4) == "1:23" and pt.formatar_tempo(3723) == "1:02:03")
+
+    feitos, falhas = pt.converter_lote(
+        [("aula.mp4", video), ("mudo.mp4", video_exemplo(1, com_audio=False)), ("lixo.mp4", b"x" * 500)]
+    )
+    checar("lote com nome .mp3", [n for n, _ in feitos] == ["aula.mp3"], str([n for n, _ in feitos]))
+    checar("vídeo mudo e lixo ficam de fora", len(falhas) == 2
+           and "faixa de som" in falhas[0] and "não consegui ler" in falhas[1], " | ".join(falhas))
+
     secao("Instagram (rede simulada)")
     import instagram_falso
     import pdf_tools.instagram as ig
@@ -346,6 +420,11 @@ def main() -> int:
          lambda: pt.redimensionar_lote([("a.png", b"x")], modo="exato", largura=10)),
         ("redimensionar acima do limite",
          lambda: pt.redimensionar_lote([("a.png", b"x")], modo="largura", largura=99999)),
+        ("mp3 com qualidade inválida", lambda: pt.converter_lote([("a.mp4", b"x")], bitrate=100)),
+        ("mp3 com fim antes do início",
+         lambda: pt.converter_lote([("a.mp4", b"x")], inicio=10, fim=5)),
+        ("mp3 começando depois do fim", lambda: pt.converter_para_mp3(video, inicio=60)),
+        ("tempo ilegível", lambda: pt.ler_tempo("1 minuto")),
     ]:
         try:
             funcao()
