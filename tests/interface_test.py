@@ -271,6 +271,61 @@ def main() -> int:
         checar("lado maior respeita a proporção de cada uma",
                tamanhos == [(250, 167), (250, 167), (150, 250)], str(tamanhos))
 
+    print("\nRemover fundo")
+    from PIL import ImageDraw
+
+    logo = Image.new("RGB", (400, 240), "white")
+    ImageDraw.Draw(logo).ellipse((40, 40, 200, 200), fill=(200, 30, 30))
+    buffer = io.BytesIO()
+    logo.save(buffer, "PNG")
+    app = rodar("tela_remover_fundo", {"imagem": [("logo.png", buffer.getvalue())]})
+    if sem_excecao(app, "remover fundo abre"):
+        metodo = next(r for r in app.radio if r.label == "Como remover")
+        checar("sugere apagar por cor em fundo liso", metodo.value == "Cor do fundo", metodo.value)
+        checar("prévia do resultado", len(app.get("image")) >= 1, f"{len(app.get('image'))} imagens")
+        checar("pincel carregado", not any("pincel não está" in i.value for i in app.info),
+               " | ".join(i.value for i in app.info)[:90])
+        app = clicar(app, "Gerar imagem")
+        prontos = resultado(app, "fundo")
+        checar("gera PNG transparente", [n for n, _ in prontos] == ["logo-sem-fundo.png"]
+               and len(downloads(app)) == 1, str([n for n, _ in prontos]) + erros(app))
+        if prontos:
+            with Image.open(io.BytesIO(prontos[0][1])) as img:
+                checar("fundo virou transparente", img.mode == "RGBA"
+                       and img.getpixel((5, 5))[3] == 0 and img.getpixel((60, 120))[3] == 255)
+
+        app.radio(key="fundo_tipo").set_value("Cor sólida").run()
+        checar("trocar o fundo esconde o resultado antigo", len(downloads(app)) == 0)
+        app.color_picker(key="fundo_cor_saida").set_value("#00FF00").run()
+        app.selectbox(key="fundo_formato_cor").set_value("JPEG").run()
+        app.checkbox(key="fundo_recortar").check().run()
+        app = clicar(app, "Gerar imagem")
+        prontos = resultado(app, "fundo")
+        checar("cor sólida em JPEG", [n for n, _ in prontos] == ["logo-fundo-00ff00.jpg"],
+               str([n for n, _ in prontos]) + erros(app))
+        if prontos:
+            with Image.open(io.BytesIO(prontos[0][1])) as img:
+                verde = img.getpixel((1, 1))
+                checar("recortado e com fundo verde", img.size == (161, 161)
+                       and verde[1] > 200 and verde[0] < 60, f"{img.size} {verde}")
+
+    app = rodar("tela_remover_fundo", {"imagem": [("foto.png", imagem_png())]})
+    if sem_excecao(app, "remover fundo com o pincel só"):
+        app.radio(key=next(r.key for r in app.radio if r.label == "Como remover")) \
+            .set_value("Nenhuma (só o pincel)").run()
+        app = clicar(app, "Gerar imagem")
+        prontos = resultado(app, "fundo")
+        if prontos:
+            with Image.open(io.BytesIO(prontos[0][1])) as img:
+                checar("sem remoção automática a imagem fica inteira",
+                       img.getpixel((5, 5))[3] == 255)
+        else:
+            checar("sem remoção automática a imagem fica inteira", False, erros(app))
+
+    app = rodar("tela_remover_fundo", {"imagem": [("quebrada.png", b"nao sou imagem")]})
+    if sem_excecao(app, "imagem quebrada"):
+        checar("imagem quebrada vira aviso", "corrompida" in erros(app), erros(app))
+
     print("\nMP4 para MP3")
     import av
 

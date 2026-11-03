@@ -297,6 +297,94 @@ def main() -> int:
     checar("arquivo quebrado não derruba o lote", len(feitas) == 1 and len(falhas) == 1,
            falhas[0][:40] if falhas else "")
 
+    secao("Remover fundo")
+    from PIL import ImageDraw
+
+    logo = Image.new("RGB", (400, 240), "white")
+    pincel = ImageDraw.Draw(logo)
+    pincel.ellipse((40, 40, 200, 200), fill=(200, 30, 30))   # anel vermelho...
+    pincel.ellipse((90, 90, 150, 150), fill="white")         # ...com miolo branco
+    pincel.rectangle((260, 80, 360, 160), fill=(20, 60, 160))
+    logo = imagem_bytes(logo, "PNG")
+
+    def alfa_em(dados, ponto):
+        with Image.open(io.BytesIO(dados)) as img:
+            return img.convert("RGBA").getpixel(ponto)[3]
+
+    def mascara_em(mascara, ponto):
+        with Image.open(io.BytesIO(mascara)) as img:
+            return img.getpixel(ponto)
+
+    cor, fracao = pt.analisar_fundo(logo)
+    checar("acha o fundo branco nas bordas", cor == "#FFFFFF" and fracao > 0.95, f"{cor} {fracao:.2f}")
+    _, fracao_foto = pt.analisar_fundo(foto())
+    checar("foto não parece fundo liso", fracao_foto < 0.95, f"{fracao_foto:.2f}")
+
+    so_borda = pt.mascara_por_cor(logo)
+    checar("apaga o fundo das bordas", mascara_em(so_borda, (5, 5)) == 0)
+    checar("mantém o desenho", mascara_em(so_borda, (60, 120)) == 255)
+    checar("miolo fechado fica por padrão", mascara_em(so_borda, (120, 120)) == 255)
+    tudo = pt.mascara_por_cor(logo, so_pelas_bordas=False)
+    checar("miolo some quando pedido", mascara_em(tudo, (120, 120)) == 0)
+    azul = pt.mascara_por_cor(logo, cor="#143CA0", tolerancia=5, so_pelas_bordas=False)
+    checar("apaga outra cor escolhida", mascara_em(azul, (300, 120)) == 0
+           and mascara_em(azul, (5, 5)) == 255)
+
+    tracos = Image.new("RGBA", (200, 120), (0, 0, 0, 0))   # metade do tamanho, como o canvas
+    desenho = ImageDraw.Draw(tracos)
+    desenho.rectangle((130, 40, 180, 80), fill=(235, 40, 40, 140))   # apaga o retângulo azul
+    desenho.rectangle((0, 0, 15, 15), fill=(20, 200, 70, 140))       # restaura um canto
+    retocada = pt.aplicar_pinceladas(so_borda, imagem_bytes(tracos, "PNG"))
+    checar("pincel vermelho apaga", mascara_em(retocada, (300, 120)) == 0)
+    checar("pincel verde restaura", mascara_em(retocada, (10, 10)) == 255)
+    checar("sem traços nada muda", pt.aplicar_pinceladas(so_borda, None) == so_borda)
+
+    png, extensao, tamanho = pt.remover_fundo(logo, so_borda)
+    checar("PNG transparente", extensao == ".png" and alfa_em(png, (5, 5)) == 0
+           and alfa_em(png, (60, 120)) == 255 and tamanho == (400, 240))
+    jpg, extensao, _ = pt.remover_fundo(logo, so_borda, fundo="cor", cor="#000000", formato="JPEG")
+    with Image.open(io.BytesIO(jpg)) as img:
+        checar("cor sólida em JPEG", extensao == ".jpg" and img.mode == "RGB"
+               and max(img.getpixel((5, 5))) < 20, str(img.getpixel((5, 5))))
+    _, _, tamanho = pt.remover_fundo(logo, so_borda, recortar=True)
+    checar("recorta o vazio em volta", tamanho == (321, 161), str(tamanho))
+    _, _, tamanho = pt.remover_fundo(logo, so_borda, recortar=True, margem=10)
+    checar("recorte com margem", tamanho == (341, 181), str(tamanho))
+    webp, extensao, _ = pt.remover_fundo(logo, so_borda, formato="WEBP", encolher=2, suavizar=1.5)
+    checar("WEBP com borda ajustada", extensao == ".webp" and alfa_em(webp, (5, 5)) == 0)
+
+    meio_transparente = Image.new("RGBA", (200, 200), (0, 120, 0, 255))
+    meio_transparente.paste((0, 0, 0, 0), (0, 0, 100, 200))
+    meio_transparente = imagem_bytes(meio_transparente, "PNG")
+    saida, _, _ = pt.remover_fundo(meio_transparente, pt.mascara_vazia(meio_transparente))
+    checar("transparência original continua", alfa_em(saida, (50, 100)) == 0
+           and alfa_em(saida, (150, 100)) == 255)
+    girada = imagem_bytes(Image.new("RGB", (300, 200), "white"), "JPEG", exif=exif)
+    checar("máscara respeita o giro do celular",
+           Image.open(io.BytesIO(pt.mascara_por_cor(girada))).size == (200, 300))
+
+    # Borda antisserrilhada: sem o refino, o contorno de um logo sobre branco
+    # vira uma linha clara quando o recorte vai para fundo escuro.
+    bola = Image.new("RGB", (400, 400), "white")
+    ImageDraw.Draw(bola).ellipse((50, 50, 350, 350), fill=(30, 30, 200))
+    bola = imagem_bytes(bola.resize((100, 100), Image.LANCZOS), "PNG")
+    sobre_preto, _, _ = pt.remover_fundo(bola, pt.mascara_por_cor(bola), fundo="cor",
+                                         cor="#000000", cor_removida="#FFFFFF", suavizar=1)
+    with Image.open(io.BytesIO(sobre_preto)) as img:
+        halo = max(sum(img.getpixel((x, 50))[:2]) for x in range(30))
+    checar("contorno sem halo claro", halo < 100, f"R+G máximo na borda = {halo}")
+
+    previa, tamanho = pt.previa_fantasma(logo, so_borda, (800, 800))
+    checar("prévia para pintar amplia imagem pequena", tamanho == (800, 480), str(tamanho))
+
+    try:
+        mascara = pt.mascara_ia(foto())
+    except ValueError as erro:
+        print(f"  [pulo] IA indisponível aqui (sem rede para baixar o modelo?): {str(erro)[:80]}")
+    else:
+        checar("IA devolve máscara do tamanho da foto",
+               Image.open(io.BytesIO(mascara)).size == (900, 700))
+
     secao("MP4 para MP3")
     import av
 
@@ -420,6 +508,11 @@ def main() -> int:
          lambda: pt.redimensionar_lote([("a.png", b"x")], modo="exato", largura=10)),
         ("redimensionar acima do limite",
          lambda: pt.redimensionar_lote([("a.png", b"x")], modo="largura", largura=99999)),
+        ("JPEG transparente", lambda: pt.remover_fundo(logo, so_borda, formato="JPEG")),
+        ("apagar tudo", lambda: pt.remover_fundo(logo, pt.mascara_por_cor(logo, tolerancia=100))),
+        ("imagem gigante para remover fundo",
+         lambda: pt.mascara_por_cor(imagem_bytes(Image.new("L", (8000, 4000)), "PNG"))),
+        ("modelo de IA inventado", lambda: pt.mascara_ia(logo, "nao-existe")),
         ("mp3 com qualidade inválida", lambda: pt.converter_lote([("a.mp4", b"x")], bitrate=100)),
         ("mp3 com fim antes do início",
          lambda: pt.converter_lote([("a.mp4", b"x")], inicio=10, fim=5)),

@@ -5,6 +5,7 @@ Toda a lógica de PDF vive em `pdf_tools`; aqui só tem widget e mensagem.
 """
 
 from .telas_audio import tela_mp4_para_mp3
+from .telas_fundo import tela_remover_fundo
 from .telas_imagens import tela_redimensionar
 from .telas_instagram import tela_instagram
 from .telas_converter import (
@@ -33,5 +34,6 @@ __all__ = [
     "tela_pdf_para_imagens",
     "tela_proteger",
     "tela_redimensionar",
+    "tela_remover_fundo",
     "tela_texto",
 ]

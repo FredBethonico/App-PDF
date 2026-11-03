@@ -38,6 +38,7 @@ FERRAMENTAS = [
     ("📄", "Imagens para PDF", "Fotos e prints viram um PDF só."),
     ("📝", "Extrair texto", "Copia o conteúdo escrito para um .txt."),
     ("📐", "Redimensionar imagens", "Várias imagens de uma vez, no tamanho em pixels que você digitar."),
+    ("🪄", "Remover fundo", "Fundo transparente ou em cor sólida, com retoque a pincel."),
     ("📸", "Baixar do Instagram", "Fotos, vídeos e carrosséis de posts públicos, pelo link."),
     ("🎵", "MP4 para MP3", "Tira o som de vídeos e salva como MP3, inteiro ou só um trecho."),
     ("💧", "Marca d'água", "Carimba um texto ou logo nas páginas."),
@@ -132,6 +133,7 @@ navegacao = st.navigation(
         ],
         "Imagens": [
             st.Page(ui.tela_redimensionar, title="Redimensionar imagens", icon="📐"),
+            st.Page(ui.tela_remover_fundo, title="Remover fundo", icon="🪄"),
         ],
         "Internet": [
             st.Page(ui.tela_instagram, title="Baixar do Instagram", icon="📸"),
