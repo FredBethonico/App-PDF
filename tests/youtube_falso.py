@@ -7,6 +7,7 @@ formatos apontam para arquivos locais (file://) gerados aqui com o PyAV.
 
 from __future__ import annotations
 
+import copy
 import io
 import os
 import tempfile
@@ -14,6 +15,7 @@ from fractions import Fraction
 from pathlib import Path
 
 import av
+import yt_dlp
 from yt_dlp.utils import DownloadError
 
 import pdf_tools.youtube as yt
@@ -99,8 +101,12 @@ def infos() -> dict[str, dict]:
          "height": 360, "fps": 30, "tbr": 500, "protocol": "file", "url": video.as_uri()},
         {"format_id": "sb0", "ext": "mhtml", "protocol": "mhtml", "url": "https://x/sb"},
     ]
+    # Na segunda extração (a do download) o YouTube devolveu outros IDs.
+    trocados = [{**f, "format_id": f["format_id"] + "x"} for f in formatos]
     return {
         "dQw4w9WgXcQ": _info("dQw4w9WgXcQ", "Vídeo de teste: 1/2", formatos),
+        "IdsMudaram1": _info("IdsMudaram1", "IDs mudaram", formatos),
+        "IdsMudaram1/download": _info("IdsMudaram1", "IDs mudaram", trocados),
         "AoVivo12345": _info("AoVivo12345", "Ao vivo", formatos, is_live=True, live_status="is_live"),
     }
 
@@ -115,6 +121,8 @@ ERROS = {
 
 
 def instalar() -> None:
+    """Imita o yt-dlp de verdade: a busca devolve a info já processada (com
+    IDs renomeados, seleção padrão etc.) e o download extrai tudo de novo."""
     tabela = infos()
     yt._OPCOES_EXTRA["enable_file_urls"] = True  # libera os links file:// acima
 
@@ -122,9 +130,17 @@ def instalar() -> None:
         video_id = link.rsplit("=", 1)[-1]
         if video_id in ERROS:
             raise DownloadError(ERROS[video_id])
-        return tabela[video_id]
+        with yt_dlp.YoutubeDL({**opcoes, "simulate": True}) as ydl:
+            processada = ydl.process_ie_result(copy.deepcopy(tabela[video_id]), download=False)
+            return ydl.sanitize_info(processada)
+
+    def executar_download(ydl, link, info):
+        video_id = link.rsplit("=", 1)[-1]
+        bruta = tabela.get(f"{video_id}/download") or tabela[video_id]
+        ydl.process_ie_result(copy.deepcopy(bruta), download=True)
 
     yt._extrair_info = extrair_info
+    yt._executar_download = executar_download
 
 
 def streams(dados: bytes) -> tuple[int, int]:
