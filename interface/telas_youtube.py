@@ -11,22 +11,21 @@ from .comum import executar, mostrar_resultado, titulo
 _MB = 1024 * 1024
 
 
-def _cookies() -> str | None:
-    """Conteúdo de um cookies.txt guardado em [youtube] nos secrets, se houver."""
+def _segredo(chave: str) -> str | None:
+    """Valor de [youtube] nos secrets (cookies, proxy), se houver."""
     try:
         bloco = st.secrets.get("youtube")
     except Exception:  # sem secrets.toml o Streamlit levanta erro ao ler
         return None
-    if not bloco or not str(bloco.get("cookies") or "").strip():
-        return None
-    return str(bloco["cookies"])
+    valor = str((bloco or {}).get(chave) or "").strip()
+    return valor or None
 
 
 # Os links de download do YouTube valem por algumas horas; 10 minutos de
 # cache evitam perguntar de novo a cada clique sem servir link vencido.
 @st.cache_data(ttl=600, show_spinner=False, max_entries=16)
-def _ler(link: str, cookies: str | None) -> pt.youtube.Video:
-    return pt.ler_video(link, cookies=cookies)
+def _ler(link: str, cookies: str | None, proxy: str | None) -> pt.youtube.Video:
+    return pt.ler_video(link, cookies=cookies, proxy=proxy)
 
 
 def _duracao(segundos: int) -> str:
@@ -77,12 +76,12 @@ def _mostrar_video(video: pt.youtube.Video) -> None:
 
 
 def tela_youtube() -> None:
-    cookies = _cookies()
-    _corpo(cookies)
-    _rodape(cookies)
+    cookies, proxy = _segredo("cookies"), _segredo("proxy")
+    _corpo(cookies, proxy)
+    _rodape(cookies, proxy)
 
 
-def _corpo(cookies: str | None) -> None:
+def _corpo(cookies: str | None, proxy: str | None) -> None:
     titulo(
         "▶️",
         "Baixar do YouTube",
@@ -109,7 +108,7 @@ def _corpo(cookies: str | None) -> None:
     if buscar:
         try:
             with st.spinner("Falando com o YouTube..."):
-                st.session_state["yt_video"] = _ler(link, cookies)
+                st.session_state["yt_video"] = _ler(link, cookies, proxy)
         except pt.ErroYoutube as erro:
             st.session_state.pop("yt_video", None)
             st.error(str(erro))
@@ -156,7 +155,7 @@ def _corpo(cookies: str | None) -> None:
 
         def rodar():
             arquivo = pt.baixar_youtube(
-                video, opcao, cookies=cookies,
+                video, opcao, cookies=cookies, proxy=proxy,
                 progresso=lambda fracao, texto: barra.progress(fracao, text=texto),
             )
             resumo = f"{opcao.rotulo}: {pt.tamanho_legivel(len(arquivo[1]))}"
@@ -170,7 +169,7 @@ def _corpo(cookies: str | None) -> None:
     mostrar_resultado("yt", assinatura, previa=False)
 
 
-def _rodape(cookies: str | None) -> None:
+def _rodape(cookies: str | None, proxy: str | None) -> None:
     st.divider()
     st.caption(
         "Baixe só o que você tem direito de usar: o conteúdo continua sendo de quem publicou."
@@ -206,11 +205,22 @@ def _rodape(cookies: str | None) -> None:
 
             Use uma **conta secundária**: quem tem esses cookies tem acesso à
             conta. Nunca coloque esses valores no código nem no GitHub.
+
+            **Erro 403 no download** quer dizer que o YouTube recusou entregar o
+            vídeo para o endereço deste servidor. O app já tenta sozinho outros
+            caminhos; se nenhum funcionar, a saída é passar o download por um
+            proxy (de preferência residencial), também nos secrets:
+
+            ```toml
+            [youtube]
+            proxy = "http://usuario:senha@host:porta"
+            ```
             """
         )
         ffmpeg, runtimes = pt.youtube.ferramentas()
         st.caption(
             "Neste servidor: ffmpeg " + ("**sim**" if ffmpeg else "**não**")
             + " · runtime JS " + (f"**{next(iter(runtimes))}**" if runtimes else "**não**")
-            + " · cookies " + ("**sim**." if cookies else "**não**.")
+            + " · cookies " + ("**sim**" if cookies else "**não**")
+            + " · proxy " + ("**sim**." if proxy else "**não**.")
         )

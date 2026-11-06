@@ -106,10 +106,14 @@ def infos() -> dict[str, dict]:
     return {
         "dQw4w9WgXcQ": _info("dQw4w9WgXcQ", "Vídeo de teste: 1/2", formatos),
         "IdsMudaram1": _info("IdsMudaram1", "IDs mudaram", formatos),
+        "Bloqueado01": _info("Bloqueado01", "Só passa com outro cliente", formatos),
+        "SempreBloq1": _info("SempreBloq1", "Bloqueado sempre", formatos),
         "IdsMudaram1/download": _info("IdsMudaram1", "IDs mudaram", trocados),
         "AoVivo12345": _info("AoVivo12345", "Ao vivo", formatos, is_live=True, live_status="is_live"),
     }
 
+
+CLIENTES_USADOS: list = []  # player_client de cada tentativa de download
 
 ERROS = {
     "Robozinho01": "ERROR: [youtube] Robozinho01: Sign in to confirm you’re not a bot. "
@@ -136,6 +140,10 @@ def instalar() -> None:
 
     def executar_download(ydl, link, info):
         video_id = link.rsplit("=", 1)[-1]
+        clientes = (ydl.params.get("extractor_args") or {}).get("youtube", {}).get("player_client")
+        CLIENTES_USADOS.append(clientes)
+        if video_id == "SempreBloq1" or (video_id == "Bloqueado01" and clientes != ["tv_samsung"]):
+            raise DownloadError("ERROR: unable to download video data: HTTP Error 403: Forbidden")
         bruta = tabela.get(f"{video_id}/download") or tabela[video_id]
         ydl.process_ie_result(copy.deepcopy(bruta), download=True)
 

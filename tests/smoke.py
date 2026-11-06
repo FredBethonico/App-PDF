@@ -542,6 +542,22 @@ def main() -> int:
         nome, dados = pt.baixar_youtube(mudou, pt.escolher_opcao(mudou.opcoes, qualidade))
         checar(f"IDs mudaram entre busca e download ({qualidade})",
                youtube_falso.streams(dados) == esperado, nome)
+    bloqueado = pt.ler_video("https://youtu.be/Bloqueado01")
+    youtube_falso.CLIENTES_USADOS.clear()
+    avisos_403 = []
+    nome, dados = pt.baixar_youtube(bloqueado, bloqueado.opcoes[1],
+                                    progresso=lambda f, t: avisos_403.append(t))
+    checar("403 tenta outros clientes até passar",
+           youtube_falso.CLIENTES_USADOS == [None, ["visionos"], ["tv_samsung"]]
+           and youtube_falso.streams(dados) == (1, 1), str(youtube_falso.CLIENTES_USADOS))
+    checar("avisa que está tentando outro caminho", any("outro caminho" in t for t in avisos_403))
+    sempre = pt.ler_video("https://youtu.be/SempreBloq1")
+    try:
+        pt.baixar_youtube(sempre, sempre.opcoes[1])
+        checar("403 em todos os clientes vira aviso", False, "não levantou erro")
+    except pt.ErroYoutube as erro:
+        checar("403 em todos os clientes vira aviso", "403" in str(erro) and "proxy" in str(erro),
+               str(erro)[:70])
     avisos = []
     pt.baixar_youtube(video_yt, video_yt.opcoes[1], progresso=lambda f, t: avisos.append((f, t)))
     checar("progresso avança até 100%", avisos and avisos[-1][0] == 1.0
