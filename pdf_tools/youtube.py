@@ -17,7 +17,6 @@ Sem runtime JS, algumas qualidades somem da lista.
 
 from __future__ import annotations
 
-import copy
 import functools
 import os
 import re
@@ -26,7 +25,7 @@ import tempfile
 from dataclasses import dataclass, field
 
 import yt_dlp
-from yt_dlp.utils import DownloadError
+from yt_dlp.utils import YoutubeDLError
 
 from .util import Arquivo, nome_seguro
 
@@ -200,6 +199,11 @@ def _traduzir(erro: Exception, com_cookies: bool) -> ErroYoutube:
         return ErroYoutube("Esse vídeo é exclusivo para membros do canal.")
     if "premieres in" in baixo or "live event will begin" in baixo or "upcoming" in baixo:
         return ErroYoutube("Esse vídeo ainda não estreou.")
+    if "requested format is not available" in baixo:
+        return ErroYoutube(
+            "O YouTube não entregou mais essa qualidade. Busque o vídeo de novo ou "
+            "escolha outra."
+        )
     if "429" in baixo or "too many requests" in baixo:
         return ErroYoutube(
             "O YouTube está limitando os acessos vindos deste servidor. Espere alguns "
@@ -238,6 +242,23 @@ def _tem(valor) -> bool:
     return valor not in (None, "none")
 
 
+# O download faz uma extração nova, e o YouTube pode devolver IDs diferentes
+# da busca (outro cliente, formato duplicado renomeado, link HLS que caiu).
+# Por isso cada seletor tenta o ID exato e, se ele sumiu, a mesma altura.
+def _seletor_video(video_id: str, audio_id: str, altura: int) -> str:
+    return (
+        f"{video_id}+{audio_id}"
+        f"/bv*[height={altura}][ext=mp4]+ba[ext=m4a]"
+        f"/bv*[height={altura}]+ba"
+        f"/bv*[height<={altura}]+ba"
+        f"/b[height<={altura}]"
+    )
+
+
+def _seletor_audio(audio_id: str) -> str:
+    return f"{audio_id}/ba[ext=m4a]/ba"
+
+
 def montar_opcoes(info: dict, tem_ffmpeg: bool) -> list[Opcao]:
     """Uma opção por altura+fps (a melhor de cada), mais as de só áudio.
 
@@ -262,7 +283,12 @@ def montar_opcoes(info: dict, tem_ffmpeg: bool) -> list[Opcao]:
         for (altura, fps), candidatos in sorted(grupos.items(), reverse=True):
             v = max(
                 candidatos,
-                key=lambda f: ((f.get("vcodec") or "").startswith("avc1"), f.get("tbr") or 0),
+                # HLS (m3u8) do YouTube é mais frágil que o download direto.
+                key=lambda f: (
+                    f.get("protocol") != "m3u8_native",
+                    (f.get("vcodec") or "").startswith("avc1"),
+                    f.get("tbr") or 0,
+                ),
             )
             v_tam, v_aprox = tamanho_formato(v, duracao)
             opcoes.append(Opcao(
@@ -270,7 +296,7 @@ def montar_opcoes(info: dict, tem_ffmpeg: bool) -> list[Opcao]:
                 altura=altura,
                 fps=fps,
                 codec=(v.get("vcodec") or "?").split(".")[0],
-                seletor=f"{v['format_id']}+{melhor_audio['format_id']}",
+                seletor=_seletor_video(v["format_id"], melhor_audio["format_id"], altura),
                 bytes=(v_tam + (a_tam or 0)) if v_tam else None,
                 aprox=v_aprox or a_aprox,
             ))
@@ -285,7 +311,7 @@ def montar_opcoes(info: dict, tem_ffmpeg: bool) -> list[Opcao]:
                 altura=f.get("height") or 0,
                 fps=round(f.get("fps") or 0),
                 codec=(f.get("vcodec") or "?").split(".")[0],
-                seletor=f["format_id"],
+                seletor=f"{f['format_id']}/b[height<={f.get('height') or 360}]/b",
                 bytes=tam,
                 aprox=aprox,
             ))
@@ -296,12 +322,12 @@ def montar_opcoes(info: dict, tem_ffmpeg: bool) -> list[Opcao]:
         kbps = round(melhor_audio.get("abr") or 0)
         opcoes.append(Opcao(
             rotulo=f"Só áudio ({melhor_audio.get('ext')}, {kbps} kbps)",
-            altura=0, fps=0, codec=codec, seletor=melhor_audio["format_id"],
+            altura=0, fps=0, codec=codec, seletor=_seletor_audio(melhor_audio["format_id"]),
             bytes=a_tam, aprox=a_aprox, so_audio=True,
         ))
         opcoes.append(Opcao(
             rotulo=f"Só áudio em MP3 ({BITRATE_MP3} kbps)",
-            altura=0, fps=0, codec="mp3", seletor=melhor_audio["format_id"],
+            altura=0, fps=0, codec="mp3", seletor=_seletor_audio(melhor_audio["format_id"]),
             bytes=(BITRATE_MP3 * 1000 / 8 * duracao) if duracao else None,
             aprox=True, so_audio=True, mp3=True,
         ))
@@ -337,6 +363,15 @@ def _extrair_info(link: str, opcoes: dict) -> dict:
         return ydl.sanitize_info(ydl.extract_info(link, download=False))
 
 
+def _executar_download(ydl, link: str, info: dict) -> None:
+    """Extrai de novo e baixa. Separado para os testes trocarem.
+
+    Não reaproveita `info` da busca: os links do YouTube vencem, e uma info já
+    processada carrega a seleção antiga de formatos (requested_formats).
+    """
+    ydl.extract_info(link, download=True)
+
+
 def ler_video(link: str, *, cookies: str | None = None) -> Video:
     """Título, canal, duração e a lista de qualidades com tamanho estimado.
 
@@ -348,7 +383,7 @@ def ler_video(link: str, *, cookies: str | None = None) -> Video:
     with tempfile.TemporaryDirectory(prefix="yt_") as pasta:
         try:
             info = _extrair_info(url, _opcoes_base(cookies, pasta))
-        except DownloadError as erro:
+        except YoutubeDLError as erro:  # DownloadError, ExtractorError...
             raise _traduzir(erro, bool(cookies)) from erro
 
     if info.get("is_live") or info.get("live_status") in ("is_live", "is_upcoming"):
@@ -452,8 +487,8 @@ def baixar(
             opcoes["merge_output_format"] = "mp4"
         try:
             with yt_dlp.YoutubeDL(opcoes) as ydl:
-                ydl.process_ie_result(copy.deepcopy(video.info), download=True)
-        except DownloadError as erro:
+                _executar_download(ydl, video.link, video.info)
+        except YoutubeDLError as erro:  # DownloadError, ExtractorError...
             raise _traduzir(erro, bool(cookies)) from erro
 
         caminho = _arquivo_final(pasta)

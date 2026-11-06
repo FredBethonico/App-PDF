@@ -518,16 +518,16 @@ def main() -> int:
     rotulos = [o.rotulo for o in video_yt.opcoes]
     checar("uma opção por altura, mais os áudios", rotulos[:2] == ["1080p", "720p"]
            and sum(o.so_audio for o in video_yt.opcoes) == 2 and "360p" not in rotulos, str(rotulos))
-    checar("prefere H.264 na mesma altura", video_yt.opcoes[0].seletor == "137+140",
+    checar("prefere H.264 na mesma altura", video_yt.opcoes[0].seletor.startswith("137+140/"),
            video_yt.opcoes[0].seletor)
     checar("ignora storyboard mhtml", all("sb0" not in o.seletor for o in video_yt.opcoes))
     checar("tamanho exato quando o YouTube informa", video_yt.opcoes[1].aprox is False)
     checar("estimativa por bitrate", video_yt.opcoes[0].aprox and
            abs(video_yt.opcoes[0].bytes - (4000 * 1000 / 8 * 2 + video_yt.opcoes[-2].bytes)) < 1)
     checar("escolhe 1080 ou a mais próxima abaixo", pt.escolher_opcao(video_yt.opcoes, 900).rotulo == "720p")
-    checar("escolhe só áudio", pt.escolher_opcao(video_yt.opcoes, "audio").seletor == "140")
+    checar("escolhe só áudio", pt.escolher_opcao(video_yt.opcoes, "audio").seletor.startswith("140/"))
     sem_ffmpeg = yt.montar_opcoes(video_yt.info, tem_ffmpeg=False)
-    checar("sem ffmpeg, só formato com som", [o.seletor for o in sem_ffmpeg if not o.so_audio] == ["18"],
+    checar("sem ffmpeg, só formato com som", [o.seletor.split("/")[0] for o in sem_ffmpeg if not o.so_audio] == ["18"],
            str([o.seletor for o in sem_ffmpeg]))
 
     nome, dados = pt.baixar_youtube(video_yt, pt.escolher_opcao(video_yt.opcoes, 720))
@@ -537,6 +537,11 @@ def main() -> int:
     checar("só áudio em M4A", nome.endswith(".m4a") and youtube_falso.streams(dados) == (0, 1), nome)
     nome, dados = pt.baixar_youtube(video_yt, pt.escolher_opcao(video_yt.opcoes, "mp3"))
     checar("só áudio em MP3", nome.endswith(".mp3") and abs(pt.info_audio(dados).duracao - 2) < 0.2, nome)
+    mudou = pt.ler_video("https://youtu.be/IdsMudaram1")
+    for qualidade, esperado in [(720, (1, 1)), ("audio", (0, 1))]:
+        nome, dados = pt.baixar_youtube(mudou, pt.escolher_opcao(mudou.opcoes, qualidade))
+        checar(f"IDs mudaram entre busca e download ({qualidade})",
+               youtube_falso.streams(dados) == esperado, nome)
     avisos = []
     pt.baixar_youtube(video_yt, video_yt.opcoes[1], progresso=lambda f, t: avisos.append((f, t)))
     checar("progresso avança até 100%", avisos and avisos[-1][0] == 1.0
