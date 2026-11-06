@@ -16,7 +16,6 @@ from .telas_converter import (
 )
 from .telas_marcas import tela_marca_dagua, tela_numerar
 from .telas_paginas import tela_dividir, tela_extrair, tela_juntar, tela_organizar
-from .telas_youtube import tela_youtube
 from .telas_seguranca import tela_desbloquear, tela_informacoes, tela_proteger
 
 __all__ = [
@@ -37,5 +36,4 @@ __all__ = [
     "tela_redimensionar",
     "tela_remover_fundo",
     "tela_texto",
-    "tela_youtube",
 ]

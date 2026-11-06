@@ -61,14 +61,6 @@ from .instagram import (
     extrair_shortcode,
     ler_post,
 )
-from .youtube import (
-    LIMITE_YOUTUBE,
-    ErroYoutube,
-    baixar as baixar_youtube,
-    escolher_opcao,
-    extrair_id,
-    ler_video,
-)
 from .marcas import (
     FONTES,
     POSICOES,
@@ -105,12 +97,6 @@ from .util import (
 )
 
 __all__ = [
-    "ler_video",
-    "extrair_id",
-    "escolher_opcao",
-    "baixar_youtube",
-    "LIMITE_YOUTUBE",
-    "ErroYoutube",
     "BITRATES",
     "ErroDeIntervalo",
     "ErroInstagram",

@@ -392,38 +392,6 @@ def main() -> int:
         checar("bloqueio do Instagram vira aviso", "limitando" in erros(app), erros(app))
     os.environ.pop("HARNESS_INSTAGRAM", None)
 
-    print("\nBaixar do YouTube (metadados simulados)")
-    os.environ["HARNESS_YOUTUBE"] = "1"
-    app = rodar("tela_youtube", {})
-    if sem_excecao(app, "youtube abre"):
-        checar("ajuda aparece antes de buscar", len(app.expander) >= 1)
-        app.text_input(key="yt_link").set_value("https://youtu.be/dQw4w9WgXcQ?si=abc")
-        app = clicar(app, "Buscar vídeo")
-        qualidade = app.radio(key="yt_qualidade_dQw4w9WgXcQ")
-        rotulos = list(qualidade.options)
-        checar("lista as qualidades com tamanho", len(rotulos) == 4 and all("B" in r for r in rotulos),
-               str(rotulos) + erros(app))
-        checar("começa na melhor até 1080p", qualidade.value == 0, str(qualidade.value))
-        app = clicar(app, "Baixar")
-        prontos = resultado(app, "yt")
-        checar("baixa o MP4", [n for n, _ in prontos] == ["Vídeo de teste- 1-2 [dQw4w9WgXcQ].mp4"]
-               and len(downloads(app)) == 1, str([n for n, _ in prontos]) + erros(app))
-        app.radio(key="yt_qualidade_dQw4w9WgXcQ").set_value(3).run()
-        checar("trocar a qualidade esconde o download antigo", not downloads(app))
-        app = clicar(app, "Baixar")
-        checar("baixa só o áudio em MP3", [n for n, _ in resultado(app, "yt")][0].endswith(".mp3"),
-               str([n for n, _ in resultado(app, "yt")]) + erros(app))
-
-    app = rodar("tela_youtube", {})
-    if sem_excecao(app, "youtube com erro"):
-        app.text_input(key="yt_link").set_value("https://www.youtube.com/playlist?list=PL1")
-        app = clicar(app, "Buscar vídeo")
-        checar("link de playlist vira aviso", "playlist" in erros(app), erros(app))
-        app.text_input(key="yt_link").set_value("https://youtu.be/Robozinho01")
-        app = clicar(app, "Buscar vídeo")
-        checar("bloqueio do YouTube vira aviso", "robô" in erros(app) and not app.radio, erros(app))
-    os.environ.pop("HARNESS_YOUTUBE", None)
-
     print()
     if FALHAS:
         print(f"{len(FALHAS)} falha(s): {', '.join(FALHAS)}")
