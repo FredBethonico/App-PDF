@@ -71,6 +71,7 @@ FERRAMENTAS = [
     ("📐", "Redimensionar imagens", "Várias imagens de uma vez, no tamanho em pixels que você digitar."),
     ("🪄", "Remover fundo", "Fundo transparente ou em cor sólida, com retoque a pincel."),
     ("📸", "Baixar do Instagram", "Fotos, vídeos e carrosséis de posts públicos, pelo link."),
+    ("▶️", "Baixar do YouTube", "Vídeo em MP4 ou só o áudio, escolhendo a qualidade pelo tamanho."),
     ("🎵", "MP4 para MP3", "Tira o som de vídeos e salva como MP3, inteiro ou só um trecho."),
     ("💧", "Marca d'água", "Carimba um texto ou logo nas páginas."),
     ("🔢", "Numerar páginas", "Números no rodapé ou no cabeçalho."),
@@ -174,6 +175,7 @@ SECOES = {
     ],
     "Internet": [
         st.Page(ui.tela_instagram, title="Baixar do Instagram", icon="📸"),
+        st.Page(ui.tela_youtube, title="Baixar do YouTube", icon="▶️"),
     ],
     "Áudio e vídeo": [
         st.Page(ui.tela_mp4_para_mp3, title="MP4 para MP3", icon="🎵"),

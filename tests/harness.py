@@ -59,6 +59,12 @@ if os.environ.get("HARNESS_INSTAGRAM"):
 
     instagram_falso.instalar()
 
+if os.environ.get("HARNESS_YOUTUBE"):
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import youtube_falso  # noqa: E402
+
+    youtube_falso.instalar()
+
 import interface as ui  # noqa: E402
 
 getattr(ui, os.environ["HARNESS_TELA"])()

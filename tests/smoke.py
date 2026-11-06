@@ -486,6 +486,85 @@ def main() -> int:
         except pt.ErroInstagram as erro:
             checar(f"erro amigável {shortcode}", trecho in str(erro), str(erro)[:60])
 
+    secao("YouTube (metadados simulados, download real de arquivos locais)")
+    import youtube_falso
+    import pdf_tools.youtube as yt
+
+    for link, esperado in [
+        ("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "dQw4w9WgXcQ"),
+        ("youtube.com/watch?feature=share&v=dQw4w9WgXcQ&t=42", "dQw4w9WgXcQ"),
+        ("https://youtu.be/dQw4w9WgXcQ?si=abc", "dQw4w9WgXcQ"),
+        ("https://m.youtube.com/shorts/dQw4w9WgXcQ", "dQw4w9WgXcQ"),
+        ("https://music.youtube.com/watch?v=dQw4w9WgXcQ&list=RDxyz", "dQw4w9WgXcQ"),
+        ("https://www.youtube.com/live/dQw4w9WgXcQ", "dQw4w9WgXcQ"),
+    ]:
+        checar(f"entende {link[:40]}", pt.extrair_id(link) == esperado)
+    for link, trecho in [
+        ("", "Cole o link"),
+        ("https://vimeo.com/123", "não é do YouTube"),
+        ("https://www.youtube.com/playlist?list=PL123", "playlist"),
+        ("https://www.youtube.com/@canal", "canal"),
+    ]:
+        try:
+            pt.extrair_id(link)
+            checar(f"recusa {link or 'vazio'}", False, "não levantou erro")
+        except pt.ErroYoutube as erro:
+            checar(f"recusa {link or 'vazio'}", trecho in str(erro), str(erro)[:60])
+
+    youtube_falso.instalar()
+    ffmpeg, _ = yt.ferramentas()
+    checar("ffmpeg disponível (sistema ou imageio-ffmpeg)", bool(ffmpeg), str(ffmpeg))
+    video_yt = pt.ler_video("https://youtu.be/dQw4w9WgXcQ")
+    rotulos = [o.rotulo for o in video_yt.opcoes]
+    checar("uma opção por altura, mais os áudios", rotulos[:2] == ["1080p", "720p"]
+           and sum(o.so_audio for o in video_yt.opcoes) == 2 and "360p" not in rotulos, str(rotulos))
+    checar("prefere H.264 na mesma altura", video_yt.opcoes[0].seletor == "137+140",
+           video_yt.opcoes[0].seletor)
+    checar("ignora storyboard mhtml", all("sb0" not in o.seletor for o in video_yt.opcoes))
+    checar("tamanho exato quando o YouTube informa", video_yt.opcoes[1].aprox is False)
+    checar("estimativa por bitrate", video_yt.opcoes[0].aprox and
+           abs(video_yt.opcoes[0].bytes - (4000 * 1000 / 8 * 2 + video_yt.opcoes[-2].bytes)) < 1)
+    checar("escolhe 1080 ou a mais próxima abaixo", pt.escolher_opcao(video_yt.opcoes, 900).rotulo == "720p")
+    checar("escolhe só áudio", pt.escolher_opcao(video_yt.opcoes, "audio").seletor == "140")
+    sem_ffmpeg = yt.montar_opcoes(video_yt.info, tem_ffmpeg=False)
+    checar("sem ffmpeg, só formato com som", [o.seletor for o in sem_ffmpeg if not o.so_audio] == ["18"],
+           str([o.seletor for o in sem_ffmpeg]))
+
+    nome, dados = pt.baixar_youtube(video_yt, pt.escolher_opcao(video_yt.opcoes, 720))
+    checar("MP4 com nome do título", nome == "Vídeo de teste- 1-2 [dQw4w9WgXcQ].mp4", nome)
+    checar("junta vídeo e áudio", youtube_falso.streams(dados) == (1, 1), str(youtube_falso.streams(dados)))
+    nome, dados = pt.baixar_youtube(video_yt, pt.escolher_opcao(video_yt.opcoes, "audio"))
+    checar("só áudio em M4A", nome.endswith(".m4a") and youtube_falso.streams(dados) == (0, 1), nome)
+    nome, dados = pt.baixar_youtube(video_yt, pt.escolher_opcao(video_yt.opcoes, "mp3"))
+    checar("só áudio em MP3", nome.endswith(".mp3") and abs(pt.info_audio(dados).duracao - 2) < 0.2, nome)
+    avisos = []
+    pt.baixar_youtube(video_yt, video_yt.opcoes[1], progresso=lambda f, t: avisos.append((f, t)))
+    checar("progresso avança até 100%", avisos and avisos[-1][0] == 1.0
+           and all(0 <= f <= 1 for f, _ in avisos), str(avisos[-1:]))
+    try:
+        pt.baixar_youtube(video_yt, video_yt.opcoes[1], limite=1000)
+        checar("recusa tamanho exato acima do limite", False, "não levantou erro")
+    except pt.ErroYoutube as erro:
+        checar("recusa tamanho exato acima do limite", "acima do limite" in str(erro), str(erro)[:60])
+    try:  # estimativa por bitrate: só dá para saber durante o download
+        pt.baixar_youtube(video_yt, video_yt.opcoes[0], limite=1000)
+        checar("corta download que passa do limite", False, "não levantou erro")
+    except pt.ErroYoutube as erro:
+        checar("corta download que passa do limite", "passou de" in str(erro), str(erro)[:60])
+
+    for video_id, trecho in [
+        ("Robozinho01", "robô"),
+        ("Privado1234", "privado"),
+        ("Sumiu123456", "não está disponível"),
+        ("Idade123456", "idade"),
+        ("AoVivo12345", "ao vivo"),
+    ]:
+        try:
+            pt.ler_video(f"https://youtu.be/{video_id}")
+            checar(f"erro amigável {video_id}", False, "não levantou erro")
+        except pt.ErroYoutube as erro:
+            checar(f"erro amigável {video_id}", trecho in str(erro), str(erro)[:60])
+
     secao("Utilidades")
     pacote = pt.zipar([("a.pdf", base), ("a.pdf", recorte)])
     import zipfile
