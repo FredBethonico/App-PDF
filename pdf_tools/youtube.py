@@ -30,9 +30,11 @@ from yt_dlp.utils import DownloadError
 
 from .util import Arquivo, nome_seguro
 
-# Mesmo raciocínio do Instagram: o arquivo inteiro fica na memória (sessão +
-# botão de download), e o plano gratuito do Streamlit tem 1 GB.
-LIMITE_YOUTUBE = 300 * 1024 * 1024
+# O arquivo inteiro fica na memória do servidor (sessão + botão de download).
+# 900 MB deixa passar 720p de vídeos longos, mas é apertado no Streamlit
+# Cloud: dois downloads grandes ao mesmo tempo podem estourar a memória e
+# reiniciar o app. Se isso acontecer, baixe este número.
+LIMITE_YOUTUBE = 900 * 1024 * 1024
 BITRATE_MP3 = 192  # kbps da opção "só áudio em MP3"
 
 _ID = r"([A-Za-z0-9_-]{11})"
