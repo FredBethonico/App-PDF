@@ -159,7 +159,7 @@ def ferramentas() -> tuple[str | None, dict]:
 _OPCOES_EXTRA: dict = {}
 
 
-def _opcoes_base(cookies: str | None, pasta: str) -> dict:
+def _opcoes_base(cookies: str | None, pasta: str, proxy: str | None = None) -> dict:
     ffmpeg, runtimes = ferramentas()
     opcoes = {
         "quiet": True,
@@ -181,6 +181,8 @@ def _opcoes_base(cookies: str | None, pasta: str) -> dict:
         with open(arquivo, "w", encoding="utf-8") as saida:
             saida.write(cookies.strip() + "\n")
         opcoes["cookiefile"] = arquivo
+    if proxy:
+        opcoes["proxy"] = proxy
     opcoes.update(_OPCOES_EXTRA)
     return opcoes
 
@@ -199,6 +201,13 @@ def _traduzir(erro: Exception, com_cookies: bool) -> ErroYoutube:
         return ErroYoutube("Esse vídeo é exclusivo para membros do canal.")
     if "premieres in" in baixo or "live event will begin" in baixo or "upcoming" in baixo:
         return ErroYoutube("Esse vídeo ainda não estreou.")
+    if "403" in baixo and "forbidden" in baixo:
+        return ErroYoutube(
+            "O YouTube bloqueou o download a partir deste servidor (erro 403), mesmo "
+            "depois de tentar vários caminhos. Isso acontece com servidores na nuvem; "
+            "tente de novo mais tarde ou configure cookies ou um proxy nos secrets "
+            "(veja a ajuda no fim da página)."
+        )
     if "requested format is not available" in baixo:
         return ErroYoutube(
             "O YouTube não entregou mais essa qualidade. Busque o vídeo de novo ou "
@@ -372,7 +381,7 @@ def _executar_download(ydl, link: str, info: dict) -> None:
     ydl.extract_info(link, download=True)
 
 
-def ler_video(link: str, *, cookies: str | None = None) -> Video:
+def ler_video(link: str, *, cookies: str | None = None, proxy: str | None = None) -> Video:
     """Título, canal, duração e a lista de qualidades com tamanho estimado.
 
     `cookies` é o conteúdo de um cookies.txt (formato Netscape) de uma conta
@@ -382,7 +391,7 @@ def ler_video(link: str, *, cookies: str | None = None) -> Video:
     url = f"https://www.youtube.com/watch?v={video_id}"
     with tempfile.TemporaryDirectory(prefix="yt_") as pasta:
         try:
-            info = _extrair_info(url, _opcoes_base(cookies, pasta))
+            info = _extrair_info(url, _opcoes_base(cookies, pasta, proxy))
         except YoutubeDLError as erro:  # DownloadError, ExtractorError...
             raise _traduzir(erro, bool(cookies)) from erro
 
@@ -450,11 +459,55 @@ def _arquivo_final(pasta: str) -> str | None:
     return max(candidatos, key=os.path.getsize) if candidatos else None
 
 
+# Clientes do YouTube que o yt-dlp imita. Servidores na nuvem às vezes levam
+# 403 do servidor de vídeo com um cliente e não com outro, e muda de um pedido
+# para outro. None = os padrões do yt-dlp; os demais dispensam o "PO token".
+_CLIENTES: tuple[tuple[str, ...] | None, ...] = (
+    None,
+    ("visionos",),
+    ("tv_samsung",),
+    ("tv",),
+)
+
+
+def _eh_403(erro: Exception) -> bool:
+    texto = str(erro).lower()
+    return "403" in texto and "forbidden" in texto
+
+
+def _baixar_uma_vez(video, opcao, clientes, cookies, proxy, progresso, limite) -> tuple[bytes, str]:
+    """Uma tentativa completa, numa pasta temporária só dela."""
+    acompanhamento = _Progresso(opcao.bytes, progresso, limite)
+    with tempfile.TemporaryDirectory(prefix="yt_") as pasta:
+        opcoes = _opcoes_base(cookies, pasta, proxy)
+        opcoes.update({
+            "format": opcao.seletor,
+            "outtmpl": "video.%(ext)s",
+            "progress_hooks": [acompanhamento.hook],
+            "postprocessor_hooks": [acompanhamento.pos_processamento],
+            "continuedl": False,
+        })
+        if clientes:
+            opcoes["extractor_args"] = {"youtube": {"player_client": list(clientes)}}
+        if "+" in opcao.seletor:
+            opcoes["merge_output_format"] = "mp4"
+        with yt_dlp.YoutubeDL(opcoes) as ydl:
+            _executar_download(ydl, video.link, video.info)
+
+        caminho = _arquivo_final(pasta)
+        if not caminho:
+            raise ErroYoutube("O download terminou sem gerar arquivo. Tente de novo.")
+        with open(caminho, "rb") as entrada:
+            dados = entrada.read()
+        return dados, os.path.splitext(caminho)[1].lower() or opcao.extensao
+
+
 def baixar(
     video: Video,
     opcao: Opcao,
     *,
     cookies: str | None = None,
+    proxy: str | None = None,
     progresso=None,
     limite: int = LIMITE_YOUTUBE,
 ) -> Arquivo:
@@ -462,7 +515,8 @@ def baixar(
 
     `progresso(fracao, texto)` é chamado durante o download. Vídeo + áudio
     separados são juntados num MP4 pelo ffmpeg; "só áudio em MP3" é convertido
-    pelo PyAV, o mesmo da ferramenta MP4 para MP3.
+    pelo PyAV, o mesmo da ferramenta MP4 para MP3. Se o servidor de vídeo
+    responder 403, tenta de novo imitando outros clientes do YouTube.
     """
     if opcao.bytes and not opcao.aprox and opcao.bytes > limite:
         raise ErroYoutube(
@@ -473,30 +527,21 @@ def baixar(
     if "+" in opcao.seletor and not ffmpeg:
         raise ErroYoutube("Essa qualidade precisa do ffmpeg, que não está disponível no servidor.")
 
-    acompanhamento = _Progresso(opcao.bytes, progresso, limite)
-    with tempfile.TemporaryDirectory(prefix="yt_") as pasta:
-        opcoes = _opcoes_base(cookies, pasta)
-        opcoes.update({
-            "format": opcao.seletor,
-            "outtmpl": "video.%(ext)s",
-            "progress_hooks": [acompanhamento.hook],
-            "postprocessor_hooks": [acompanhamento.pos_processamento],
-            "continuedl": False,
-        })
-        if "+" in opcao.seletor:
-            opcoes["merge_output_format"] = "mp4"
+    erro_403 = None
+    for tentativa, clientes in enumerate(_CLIENTES, start=1):
+        if tentativa > 1 and progresso:
+            progresso(0.0, f"O YouTube recusou; tentando outro caminho ({tentativa}/{len(_CLIENTES)})...")
         try:
-            with yt_dlp.YoutubeDL(opcoes) as ydl:
-                _executar_download(ydl, video.link, video.info)
+            dados, extensao = _baixar_uma_vez(video, opcao, clientes, cookies, proxy, progresso, limite)
+            break
         except YoutubeDLError as erro:  # DownloadError, ExtractorError...
-            raise _traduzir(erro, bool(cookies)) from erro
-
-        caminho = _arquivo_final(pasta)
-        if not caminho:
-            raise ErroYoutube("O download terminou sem gerar arquivo. Tente de novo.")
-        with open(caminho, "rb") as entrada:
-            dados = entrada.read()
-        extensao = os.path.splitext(caminho)[1].lower() or opcao.extensao
+            # A 1ª tentativa só segue em frente com 403; as alternativas seguem
+            # com qualquer erro (um cliente pode não ter a qualidade, por exemplo).
+            if tentativa == 1 and not _eh_403(erro):
+                raise _traduzir(erro, bool(cookies)) from erro
+            erro_403 = erro_403 or erro
+    else:
+        raise _traduzir(erro_403, bool(cookies)) from erro_403
 
     if opcao.mp3:
         from .audio import converter_para_mp3
