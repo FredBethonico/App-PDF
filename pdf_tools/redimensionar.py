@@ -162,7 +162,7 @@ def redimensionar_imagem(
       fundo   - mostra a imagem inteira sem distorcer; completa com faixas de fundo
       esticar - força o tamanho, deformando se a proporção for diferente
 
-    formato "original" mantém PNG, JPEG e WEBP; BMP, TIFF e GIF viram PNG.
+    formato "original" mantém PNG, JPEG e WEBP; BMP, TIFF, GIF e HEIC viram PNG.
     """
     _validar_medidas(modo, largura, altura, lado)
     _validar_saida(encaixe, formato)

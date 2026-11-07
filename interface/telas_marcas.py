@@ -9,6 +9,7 @@ import streamlit as st
 import pdf_tools as pt
 
 from .comum import (
+    TIPO_IMAGEM,
     campo_intervalo,
     executar,
     mostrar_resultado,
@@ -133,7 +134,7 @@ def _marca_texto(entrada) -> None:
 
 def _marca_imagem(entrada) -> None:
     enviada = st.file_uploader(
-        "Logo ou assinatura", type=["png", "jpg", "jpeg", "webp"], key="marca_logo"
+        "Logo ou assinatura", type=TIPO_IMAGEM, key="marca_logo"
     )
     if enviada is None:
         st.caption("Envie um PNG com fundo transparente para o melhor resultado.")

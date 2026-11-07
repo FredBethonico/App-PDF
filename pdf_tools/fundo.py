@@ -69,6 +69,38 @@ def _abrir(dados: bytes) -> Image.Image:
     return imagem
 
 
+def caber_no_limite(dados: bytes) -> tuple[bytes, tuple[int, int] | None]:
+    """Reduz a foto que passa dos limites desta ferramenta, em vez de recusá-la.
+
+    Celular novo tira foto de 50 MP (e até 200 MP). Devolve (dados, None) se
+    a imagem já cabe; senão (imagem reduzida, tamanho original). A reduzida
+    sai já girada pelo EXIF, em JPEG 95 (ou PNG, se tiver transparência).
+    """
+    limite = MEGAPIXELS_MAXIMO * 1_000_000
+    with Image.open(io.BytesIO(dados)) as aberta:
+        largura, altura = aberta.size
+        orientacao = aberta.getexif().get(0x0112, 1)
+        if largura * altura <= limite and max(largura, altura) <= LADO_MAXIMO:
+            return dados, None
+        fator = min((limite / (largura * altura)) ** 0.5, LADO_MAXIMO / max(largura, altura))
+        alvo = (max(1, int(largura * fator)), max(1, int(altura * fator)))
+        # JPEG: decodifica já em 1/2, 1/4... do tamanho; 200 MP não cabe inteiro na memória.
+        aberta.draft("RGB", alvo)
+        imagem = ImageOps.exif_transpose(aberta)
+        imagem = _modo_de_trabalho(imagem)
+    if orientacao in (5, 6, 7, 8):
+        alvo = (alvo[1], alvo[0])
+    imagem = imagem.resize(alvo, Image.LANCZOS)
+    original = (altura, largura) if orientacao in (5, 6, 7, 8) else (largura, altura)
+
+    buffer = io.BytesIO()
+    if "A" in imagem.getbands():
+        imagem.save(buffer, "PNG")
+    else:
+        imagem.convert("RGB").save(buffer, "JPEG", quality=95)
+    return buffer.getvalue(), original
+
+
 def _png(imagem: Image.Image) -> bytes:
     buffer = io.BytesIO()
     imagem.save(buffer, "PNG")

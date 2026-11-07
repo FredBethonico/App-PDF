@@ -13,6 +13,13 @@ from pdf_tools.util import Arquivo
 
 LIMITE_PREVIA_MB = 60  # acima disso a prévia sai cara e a tela trava
 
+# "image" vira accept="image/*" no navegador. Com a lista de extensões
+# (".png,.jpg,..."), o Android abre só câmera e gerenciador de arquivos, sem a
+# galeria, e o Streamlit ainda recusa foto cujo nome não termina numa delas —
+# o que a galeria do Android às vezes entrega ("1000012345", sem extensão).
+# Com o tipo MIME, quem confere o conteúdo é o Pillow, ao abrir a imagem.
+TIPO_IMAGEM = "image"
+
 
 @dataclass
 class Entrada:
@@ -128,7 +135,7 @@ def receber_varios_pdfs(chave: str, rotulo: str = "Escolha os PDFs") -> list[Arq
 def receber_imagens(chave: str, rotulo: str = "Escolha as imagens") -> list[Arquivo]:
     enviados = st.file_uploader(
         rotulo,
-        type=pt.FORMATOS_ENTRADA,
+        type=TIPO_IMAGEM,
         accept_multiple_files=True,
         key=f"upload_{chave}",
     )

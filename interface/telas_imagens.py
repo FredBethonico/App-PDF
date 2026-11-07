@@ -203,7 +203,7 @@ def tela_redimensionar() -> None:
             list(FORMATOS),
             key="redim_formato",
             help="'Mesmo do original' mantém PNG como PNG e JPEG como JPEG. "
-                 "BMP, TIFF e GIF viram PNG.",
+                 "BMP, TIFF, GIF e HEIC viram PNG.",
         )
     ]
     usa_qualidade = opcoes["formato"] in ("JPEG", "WEBP") or (

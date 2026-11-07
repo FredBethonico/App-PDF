@@ -33,10 +33,12 @@ from .documento import (
 )
 from .fundo import (
     FORMATOS_SAIDA as FORMATOS_SEM_FUNDO,
+    MEGAPIXELS_MAXIMO,
     MODELO_PADRAO,
     MODELOS_IA,
     analisar_fundo,
     aplicar_pinceladas,
+    caber_no_limite,
     mascara_ia,
     mascara_por_cor,
     mascara_vazia,
@@ -108,6 +110,7 @@ __all__ = [
     "InfoAudio",
     "LADO_MAXIMO",
     "LIMITE_POR_ARQUIVO",
+    "MEGAPIXELS_MAXIMO",
     "MODELO_PADRAO",
     "MODELOS_IA",
     "NIVEIS",
@@ -118,6 +121,7 @@ __all__ = [
     "analisar_fundo",
     "aplicar_pinceladas",
     "baixar_midias",
+    "caber_no_limite",
     "comprimir_estrutura",
     "comprimir_imagens",
     "contar_paginas",

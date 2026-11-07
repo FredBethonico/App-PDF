@@ -23,7 +23,17 @@ from .util import Arquivo, nome_base, nome_seguro, numerar
 Image.MAX_IMAGE_PIXELS = None
 
 MAX_PIXELS_POR_PAGINA = 80_000_000  # ~8000 x 10000 px
-FORMATOS_ENTRADA = ["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff", "gif"]
+FORMATOS_ENTRADA = ["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff", "gif", "heic", "heif"]
+
+# HEIC/HEIF é o formato de foto do iPhone e dos Samsung em "alta eficiência".
+# O pillow-heif ensina o Pillow a abri-lo; registrado aqui, vale para todas as
+# ferramentas que recebem imagem. Sem o pacote, essas fotos só não abrem.
+try:
+    from pillow_heif import register_heif_opener
+except ImportError:  # pragma: no cover - depende da instalação
+    pass
+else:
+    register_heif_opener()
 
 _PAGINAS_PT = {
     "A4 retrato": (595.28, 841.89),

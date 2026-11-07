@@ -8,7 +8,7 @@ import streamlit as st
 
 import pdf_tools as pt
 
-from .comum import executar, mostrar_resultado, titulo
+from .comum import TIPO_IMAGEM, executar, mostrar_resultado, titulo
 
 METODOS = {
     "Inteligência artificial": (
@@ -35,6 +35,16 @@ PINCEIS = {
 _CAIXA_PINCEL = (560, 560)  # o canvas cabe na coluna sem rolar na maioria das telas
 _LADO_PREVIA = 900
 _FRACAO_FUNDO_LISO = 0.95
+
+
+@st.cache_data(show_spinner="Preparando a foto...", max_entries=4)
+def _caber_no_limite(dados: bytes) -> tuple[bytes, tuple[int, int] | None]:
+    return pt.caber_no_limite(dados)
+
+
+def _dimensoes(dados: bytes) -> str:
+    largura, altura = pt.dimensoes_imagem(dados)
+    return f"{largura} × {altura}"
 
 
 @st.cache_data(show_spinner=False, max_entries=8)
@@ -262,23 +272,31 @@ def tela_remover_fundo() -> None:
         "fundo transparente ou em cor sólida.",
     )
 
-    enviado = st.file_uploader(
-        "Escolha a imagem", type=pt.FORMATOS_ENTRADA, key="upload_fundo"
-    )
+    enviado = st.file_uploader("Escolha a imagem", type=TIPO_IMAGEM, key="upload_fundo")
     if enviado is None:
         st.caption(
             "Formatos aceitos: " + ", ".join(f.upper() for f in pt.FORMATOS_ENTRADA) + "."
         )
         return
-    dados = enviado.getvalue()
     try:
+        dados, tamanho_original = _caber_no_limite(enviado.getvalue())
         _analise(dados)
     except ValueError as erro:
         st.error(str(erro))
         return
     except Exception:
-        st.error("Não consegui abrir essa imagem. Ela pode estar corrompida.")
+        st.error(
+            "Não consegui abrir essa imagem. O formato pode não ser suportado "
+            "ou o arquivo está corrompido."
+        )
         return
+
+    if tamanho_original:
+        st.info(
+            f"A foto tem {tamanho_original[0]} × {tamanho_original[1]} px, acima do limite "
+            f"de {pt.MEGAPIXELS_MAXIMO} megapixels desta ferramenta. Reduzi para "
+            f"{_dimensoes(dados)} px, que ainda sobra para tela e impressão comum."
+        )
 
     sufixo = hashlib.md5(dados).hexdigest()[:10]
     automatico = _passo_automatico(dados, sufixo)
