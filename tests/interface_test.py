@@ -322,9 +322,23 @@ def main() -> int:
         else:
             checar("sem remoção automática a imagem fica inteira", False, erros(app))
 
+    # Galeria do Android: HEIC e nome sem extensão (o Streamlit não barra mais pelo nome).
+    heic = io.BytesIO()
+    foto_grande = Image.new("RGB", (8000, 4000), "white")
+    ImageDraw.Draw(foto_grande).ellipse((2000, 1000, 6000, 3000), fill=(30, 90, 200))
+    foto_grande.save(heic, "HEIF", quality=40)
+    app = rodar("tela_remover_fundo", {"imagem": [("1000012345", heic.getvalue())]})
+    if sem_excecao(app, "foto HEIC grande e sem extensão"):
+        checar("avisa que reduziu a foto de 32 MP", any("Reduzi para" in i.value for i in app.info),
+               " | ".join(i.value for i in app.info)[:120] + erros(app))
+        app = clicar(app, "Gerar imagem")
+        prontos = resultado(app, "fundo")
+        checar("gera a partir do HEIC", [n for n, _ in prontos] == ["1000012345-sem-fundo.png"],
+               str([n for n, _ in prontos]) + erros(app))
+
     app = rodar("tela_remover_fundo", {"imagem": [("quebrada.png", b"nao sou imagem")]})
     if sem_excecao(app, "imagem quebrada"):
-        checar("imagem quebrada vira aviso", "corrompida" in erros(app), erros(app))
+        checar("imagem quebrada vira aviso", "corrompido" in erros(app), erros(app))
 
     print("\nMP4 para MP3")
     import av

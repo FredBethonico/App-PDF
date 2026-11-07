@@ -374,6 +374,19 @@ def main() -> int:
         halo = max(sum(img.getpixel((x, 50))[:2]) for x in range(30))
     checar("contorno sem halo claro", halo < 100, f"R+G máximo na borda = {halo}")
 
+    # Foto de celular: HEIC e 50 MP gravada deitada (EXIF manda girar).
+    heic = imagem_bytes(Image.new("RGB", (300, 200), "white"), "HEIF")
+    checar("abre foto HEIC", Image.open(io.BytesIO(pt.mascara_por_cor(heic))).size == (300, 200))
+    checar("HEIC também no redimensionar",
+           pt.redimensionar_imagem(heic, modo="largura", largura=150)[1:] == (".png", (150, 100)))
+    grande = imagem_bytes(Image.new("RGB", (8160, 6120), "white"), "JPEG", exif=exif, quality=60)
+    reduzida, original = pt.caber_no_limite(grande)
+    with Image.open(io.BytesIO(reduzida)) as img:
+        checar("foto de 50 MP é reduzida, não recusada",
+               original == (6120, 8160) and img.width * img.height <= 25_000_000
+               and img.height > img.width, f"{original} -> {img.size}")
+    checar("foto dentro do limite passa igual", pt.caber_no_limite(logo) == (logo, None))
+
     previa, tamanho = pt.previa_fantasma(logo, so_borda, (800, 800))
     checar("prévia para pintar amplia imagem pequena", tamanho == (800, 480), str(tamanho))
 
