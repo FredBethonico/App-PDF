@@ -9,3 +9,4 @@ av>=14.0
 rembg[cpu]>=2.0.50
 streamlit-drawable-canvas>=0.13
 pillow-heif>=0.18
+pymupdf>=1.27.1
