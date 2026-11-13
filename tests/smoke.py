@@ -102,6 +102,91 @@ def video_exemplo(segundos: float = 3, com_audio: bool = True, taxa: int = 44100
     return buffer.getvalue()
 
 
+def epub_exemplo(
+    capitulos: int = 3,
+    paragrafos: int = 40,
+    *,
+    extras: dict[str, bytes | str] | None = None,
+    sem: tuple[str, ...] = (),
+) -> bytes:
+    """EPUB 3 de verdade, feito na hora.
+
+    Tem sumário com subnível, uma imagem, CSS que pinta o texto de vermelho,
+    um link para uma nota em outro capítulo e um link externo. `extras`
+    acrescenta arquivos ao pacote (ex.: encryption.xml) e `sem` tira algum.
+    """
+    import zipfile
+
+    ns_xhtml = 'xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"'
+    arquivos: dict[str, bytes | str] = {
+        "mimetype": "application/epub+zip",
+        "META-INF/container.xml": (
+            '<?xml version="1.0"?><container version="1.0" '
+            'xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles>'
+            '<rootfile full-path="OEBPS/livro.opf" media-type="application/oebps-package+xml"/>'
+            "</rootfiles></container>"
+        ),
+        "OEBPS/estilo.css": "p { color: #aa0000; font-family: monospace; line-height: 1.1; }",
+        "OEBPS/capa.png": foto(120, 160),
+    }
+    itens = "".join(
+        f'<item id="c{i}" href="c{i}.xhtml" media-type="application/xhtml+xml"/>'
+        for i in range(1, capitulos + 1)
+    )
+    arquivos["OEBPS/livro.opf"] = (
+        '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" '
+        'unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+        "<dc:title>Memórias de Teste</dc:title><dc:creator>Fulana de Tal</dc:creator>"
+        "<dc:language>pt-BR</dc:language><dc:publisher>Editora Caseira</dc:publisher>"
+        '<dc:identifier id="id">teste-1</dc:identifier></metadata><manifest>'
+        '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>'
+        '<item id="css" href="estilo.css" media-type="text/css"/>'
+        '<item id="capa" href="capa.png" media-type="image/png"/>'
+        f"{itens}</manifest><spine>"
+        + "".join(f'<itemref idref="c{i}"/>' for i in range(1, capitulos + 1))
+        + "</spine></package>"
+    )
+    sumario = "".join(
+        f'<li><a href="c{i}.xhtml">Capítulo {i}</a>'
+        + (f'<ol><li><a href="c{i}.xhtml#secao{i}">Seção {i}.1</a></li></ol>' if i == 1 else "")
+        + "</li>"
+        for i in range(1, capitulos + 1)
+    )
+    arquivos["OEBPS/nav.xhtml"] = (
+        f'<html {ns_xhtml}><body><nav epub:type="toc"><ol>{sumario}</ol></nav></body></html>'
+    )
+    for i in range(1, capitulos + 1):
+        texto = "".join(
+            f"<p>Parágrafo {k} do capítulo {i}: texto corrido com acentuação.</p>"
+            for k in range(paragrafos)
+        )
+        extra = ""
+        if i == 1:
+            extra = (
+                '<p><img src="capa.png" alt="capa"/></p>'
+                f'<p>Veja a <a href="c{capitulos}.xhtml#nota">nota final</a> e o '
+                '<a href="https://example.com/livro">site do livro</a>.</p>'
+            )
+        if i == capitulos:
+            texto += '<h2 id="nota">NOTA-FINAL-AQUI</h2><p>Conteúdo da nota.</p>'
+        arquivos[f"OEBPS/c{i}.xhtml"] = (
+            f'<html {ns_xhtml}><head><title>c{i}</title>'
+            '<link rel="stylesheet" href="estilo.css"/></head>'
+            f"<body><h1>Capítulo {i}</h1>{extra}"
+            f'<h2 id="secao{i}">Seção {i}.1</h2>{texto}</body></html>'
+        )
+    arquivos.update(extras or {})
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for nome, conteudo in arquivos.items():
+            if nome in sem:
+                continue
+            tipo = zipfile.ZIP_STORED if nome == "mimetype" else zipfile.ZIP_DEFLATED
+            zf.writestr(nome, conteudo, compress_type=tipo)
+    return buffer.getvalue()
+
+
 def secao(titulo: str) -> None:
     print(f"\n{titulo}")
 
@@ -437,6 +522,124 @@ def main() -> int:
     checar("vídeo mudo e lixo ficam de fora", len(falhas) == 2
            and "faixa de som" in falhas[0] and "não consegui ler" in falhas[1], " | ".join(falhas))
 
+    secao("EPUB para PDF")
+    import pymupdf
+
+    livro = epub_exemplo()
+    info_livro = pt.inspecionar_epub(livro)
+    checar("lê título e autor do EPUB",
+           (info_livro.titulo, info_livro.autor) == ("Memórias de Teste", "Fulana de Tal"),
+           f"{info_livro.titulo} / {info_livro.autor}")
+    checar("lê idioma, editora, capítulos e imagens",
+           (info_livro.idioma, info_livro.editora, info_livro.capitulos, info_livro.imagens)
+           == ("pt-BR", "Editora Caseira", 3, 1),
+           str(info_livro))
+
+    feito = pt.epub_para_pdf(livro, mostrar_etapas=False)
+    convertido = pymupdf.open("pdf", feito.pdf)
+    largura, altura = convertido[0].rect.width, convertido[0].rect.height
+    checar("gera PDF em A5", (round(largura), round(altura)) == (420, 595), f"{largura}x{altura}")
+    checar("conta as páginas", feito.paginas == convertido.page_count > 3, str(feito.paginas))
+    checar("texto selecionável com acento", "acentuação" in convertido[1].get_text())
+    checar("título e autor nos metadados",
+           (convertido.metadata["title"], convertido.metadata["author"])
+           == ("Memórias de Teste", "Fulana de Tal"))
+    toc = convertido.get_toc()
+    checar("sumário vira marcadores com subnível",
+           [nivel for nivel, *_ in toc] == [1, 2, 1, 1] and feito.marcadores == 4, str(toc))
+    checar("marcador aponta para o capítulo certo",
+           len(toc) == 4 and all(f"Capítulo {n}" in convertido[toc[i][2] - 1].get_text()
+               for i, n in ((0, 1), (2, 2), (3, 3))), str(toc))
+    checar("imagem do livro vai junto", any(p.get_images() for p in convertido))
+    links_pdf = convertido[0].get_links()
+    externo = [l for l in links_pdf if l.get("uri")]
+    interno = [l for l in links_pdf if l["kind"] == pymupdf.LINK_GOTO]
+    checar("link externo clicável", [l["uri"] for l in externo] == ["https://example.com/livro"])
+    checar("link interno vai para a página certa",
+           len(interno) == 1 and "NOTA-FINAL-AQUI" in convertido[interno[0]["page"]].get_text(),
+           f"página {interno[0]['page'] + 1 if interno else '-'} de {convertido.page_count}")
+
+    def primeiro_paragrafo(pdf_bytes):
+        doc = pymupdf.open("pdf", pdf_bytes)
+        for pagina in doc:
+            for bloco in pagina.get_text("dict")["blocks"]:
+                for linha in bloco.get("lines", []):
+                    for span in linha["spans"]:
+                        if span["text"].startswith("Parágrafo"):
+                            return span, round(bloco["bbox"][0])
+        return None, None
+
+    span, esquerda = primeiro_paragrafo(feito.pdf)
+    checar("respeita o CSS do livro", span["color"] == 0xAA0000 and "Mono" in span["font"],
+           f"{span['color']:#x} {span['font']}")
+    checar("margem de 15 mm", abs(esquerda - 15 / 25.4 * 72) <= 2, str(esquerda))
+    span, esquerda = primeiro_paragrafo(pt.epub_para_pdf(
+        livro, estilo_do_livro=False, fonte="Sem serifa", margem_mm=30, mostrar_etapas=False
+    ).pdf)
+    checar("ignora o CSS do livro quando pedido", span["color"] == 0, f"{span['color']:#x}")
+    checar("troca a fonte", "Mono" not in span["font"] and "Sans" in span["font"]
+           or "Helvetica" in span["font"], span["font"])
+    checar("margem de 30 mm", abs(esquerda - 30 / 25.4 * 72) <= 2, str(esquerda))
+    span, _ = primeiro_paragrafo(pt.epub_para_pdf(livro, fonte="Serifada", mostrar_etapas=False).pdf)
+    checar("fonte vence o CSS do livro", "Mono" not in span["font"], span["font"])
+    span, _ = primeiro_paragrafo(pt.epub_para_pdf(livro, estilo_do_livro=True, mostrar_etapas=False).pdf)
+    checar("CSS do livro volta na conversão seguinte", span["color"] == 0xAA0000)
+
+    grande = pt.epub_para_pdf(livro, tamanho_fonte=18, mostrar_etapas=False)
+    pequena = pt.epub_para_pdf(livro, tamanho_fonte=8, mostrar_etapas=False)
+    checar("letra maior dá mais páginas", grande.paginas > feito.paginas > pequena.paginas,
+           f"{pequena.paginas} < {feito.paginas} < {grande.paginas}")
+    folgada = pt.epub_para_pdf(livro, entrelinha="Dupla (2,0)", mostrar_etapas=False)
+    checar("entrelinha dupla dá mais páginas", folgada.paginas > feito.paginas,
+           f"{feito.paginas} -> {folgada.paginas}")
+    a4 = pymupdf.open("pdf", pt.epub_para_pdf(livro, tamanho_pagina="A4", mostrar_etapas=False).pdf)
+    checar("página A4", round(a4[0].rect.width) == 595)
+    cru = pt.epub_para_pdf(livro, sumario=False, links=False, mostrar_etapas=False)
+    sem_extras = pymupdf.open("pdf", cru.pdf)
+    checar("sem marcadores nem links quando pedido",
+           not sem_extras.get_toc() and not sem_extras[0].get_links() and cru.links == 0)
+
+    passos: list[float] = []
+    longo = epub_exemplo(capitulos=8, paragrafos=200)
+    feito_longo = pt.epub_para_pdf(longo, progresso=passos.append, mostrar_etapas=False)
+    checar("progresso anda até 100%", len(passos) > 3 and passos == sorted(passos)
+           and passos[-1] == 1.0, f"{len(passos)} passos")
+    checar("livro longo em blocos não perde página",
+           pymupdf.open("pdf", feito_longo.pdf).page_count == feito_longo.paginas > 100,
+           str(feito_longo.paginas))
+    checar("fontes enxutas deixam o PDF leve", len(feito_longo.pdf) < 2_000_000,
+           pt.tamanho_legivel(len(feito_longo.pdf)))
+
+    ofuscada = epub_exemplo(extras={"META-INF/encryption.xml": (
+        '<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" '
+        'xmlns:enc="http://www.w3.org/2001/04/xmlenc#"><enc:EncryptedData>'
+        '<enc:EncryptionMethod Algorithm="http://www.idpf.org/2008/embedding"/>'
+        '<enc:CipherData><enc:CipherReference URI="OEBPS/fonte.otf"/></enc:CipherData>'
+        "</enc:EncryptedData></encryption>")})
+    checar("fonte ofuscada não é DRM", pt.epub_para_pdf(ofuscada, mostrar_etapas=False).paginas > 0)
+    sem_mimetype = pt.epub_para_pdf(epub_exemplo(sem=("mimetype",)), mostrar_etapas=False)
+    checar("sem mimetype converte com aviso",
+           any("mimetype" in a for a in sem_mimetype.avisos), str(sem_mimetype.avisos))
+
+    drm = epub_exemplo(extras={"META-INF/encryption.xml": (
+        '<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" '
+        'xmlns:enc="http://www.w3.org/2001/04/xmlenc#"><enc:EncryptedData>'
+        '<enc:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes128-cbc"/>'
+        '<enc:CipherData><enc:CipherReference URI="OEBPS/c1.xhtml"/></enc:CipherData>'
+        "</enc:EncryptedData></encryption>")})
+    prontos_epub, problemas_epub, avisos_epub = pt.converter_epubs_lote(
+        [("bom.epub", livro), ("drm.epub", drm), ("lixo.epub", b"PK\x03\x04lixo"),
+         ("kindle.epub", b"x" * 60 + b"BOOKMOBI" + b"x" * 100)],
+        mostrar_etapas=False,
+    )
+    checar("lote converte o livro bom", [n for n, _ in prontos_epub] == ["bom.pdf"],
+           str([n for n, _ in prontos_epub]))
+    checar("DRM, zip quebrado e MOBI ficam de fora com motivo",
+           len(problemas_epub) == 3 and "DRM" in problemas_epub[0]
+           and "corrompido" in problemas_epub[1] and "MOBI" in problemas_epub[2],
+           " | ".join(problemas_epub)[:200])
+    checar("lote sem avisos à toa", avisos_epub == [], str(avisos_epub))
+
     secao("Instagram (rede simulada)")
     import instagram_falso
     import pdf_tools.instagram as ig
@@ -531,6 +734,21 @@ def main() -> int:
          lambda: pt.converter_lote([("a.mp4", b"x")], inicio=10, fim=5)),
         ("mp3 começando depois do fim", lambda: pt.converter_para_mp3(video, inicio=60)),
         ("tempo ilegível", lambda: pt.ler_tempo("1 minuto")),
+        ("EPUB que é PDF", lambda: pt.epub_para_pdf(base, mostrar_etapas=False)),
+        ("EPUB sem container.xml",
+         lambda: pt.inspecionar_epub(epub_exemplo(sem=("META-INF/container.xml",)))),
+        ("EPUB com DRM da Adobe",
+         lambda: pt.epub_para_pdf(epub_exemplo(extras={"META-INF/rights.xml": "<x/>"}),
+                                  mostrar_etapas=False)),
+        ("EPUB vazio", lambda: pt.inspecionar_epub(b"")),
+        ("EPUB com letra minúscula demais",
+         lambda: pt.epub_para_pdf(livro, tamanho_fonte=2, mostrar_etapas=False)),
+        ("EPUB com margem que engole a página",
+         lambda: pt.epub_para_pdf(livro, tamanho_pagina="Leitor digital (6 pol)",
+                                  margem_mm=45, mostrar_etapas=False)),
+        ("EPUB com página inventada",
+         lambda: pt.epub_para_pdf(livro, tamanho_pagina="B7", mostrar_etapas=False)),
+        ("lote de EPUB vazio", lambda: pt.converter_epubs_lote([])),
     ]:
         try:
             funcao()

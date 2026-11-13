@@ -19,7 +19,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 from PIL import Image
 from streamlit.testing.v1 import AppTest
 
-from smoke import pdf_exemplo, video_exemplo
+from smoke import epub_exemplo, pdf_exemplo, video_exemplo
 
 HARNESS = str(Path(__file__).with_name("harness.py"))
 FALHAS: list[str] = []
@@ -405,6 +405,40 @@ def main() -> int:
         app = clicar(app, "Buscar e baixar")
         checar("bloqueio do Instagram vira aviso", "limitando" in erros(app), erros(app))
     os.environ.pop("HARNESS_INSTAGRAM", None)
+
+    print("\nEPUB para PDF")
+    import pymupdf
+
+    livro = epub_exemplo()
+    app = rodar("tela_epub_para_pdf", {"livros": [("memorias.epub", livro)]})
+    if sem_excecao(app, "epub abre"):
+        checar("mostra o título do livro", any("Memórias de Teste" in m.value for m in app.markdown))
+        app.selectbox(key="epub_pagina").set_value("A4").run()
+        app.slider(key="epub_fonte_tamanho").set_value(14).run()
+        app = clicar(app, "Converter para PDF")
+        prontos = resultado(app, "epub")
+        checar("gera o PDF", [n for n, _ in prontos] == ["memorias.pdf"] and len(downloads(app)) >= 1,
+               str([n for n, _ in prontos]) + erros(app))
+        if prontos:
+            doc = pymupdf.open("pdf", prontos[0][1])
+            checar("respeita A4 escolhido na tela", round(doc[0].rect.width) == 595)
+            checar("PDF da tela tem marcadores", len(doc.get_toc()) == 4, str(doc.get_toc()))
+        checar("resumo conta as páginas", any("página(s)" in s.value for s in app.success),
+               " | ".join(s.value for s in app.success))
+        app.slider(key="epub_margem").set_value(25).run()
+        checar("mudar opção esconde o resultado antigo", not downloads(app))
+
+    drm = epub_exemplo(extras={"META-INF/rights.xml": "<rights/>"})
+    app = rodar("tela_epub_para_pdf", {"livros": [("bom.epub", livro), ("loja.epub", drm),
+                                                  ("lixo.epub", b"nao sou zip")]})
+    if sem_excecao(app, "epub em lote"):
+        checar("avisa do DRM e do arquivo ruim",
+               len(app.warning) == 2 and "DRM" in app.warning[0].value
+               and "não é um EPUB" in app.warning[1].value,
+               " | ".join(w.value for w in app.warning)[:160])
+        app = clicar(app, "Converter para PDF")
+        checar("lote converte só o bom", [n for n, _ in resultado(app, "epub")] == ["bom.pdf"],
+               str([n for n, _ in resultado(app, "epub")]) + erros(app))
 
     print()
     if FALHAS:

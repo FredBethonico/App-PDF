@@ -68,6 +68,7 @@ FERRAMENTAS = [
     ("🖼️", "PDF para imagens", "Cada página vira um PNG ou JPEG."),
     ("📄", "Imagens para PDF", "Fotos e prints viram um PDF só."),
     ("📝", "Extrair texto", "Copia o conteúdo escrito para um .txt."),
+    ("📚", "EPUB para PDF", "Livros digitais viram PDF, com sumário e links clicáveis."),
     ("📐", "Redimensionar imagens", "Várias imagens de uma vez, no tamanho em pixels que você digitar."),
     ("🪄", "Remover fundo", "Fundo transparente ou em cor sólida, com retoque a pincel."),
     ("📸", "Baixar do Instagram", "Fotos, vídeos e carrosséis de posts públicos, pelo link."),
@@ -167,6 +168,7 @@ SECOES = {
         st.Page(ui.tela_pdf_para_imagens, title="PDF para imagens", icon="🖼️"),
         st.Page(ui.tela_imagens_para_pdf, title="Imagens para PDF", icon="📄"),
         st.Page(ui.tela_texto, title="Extrair texto", icon="📝"),
+        st.Page(ui.tela_epub_para_pdf, title="EPUB para PDF", icon="📚"),
     ],
     "Imagens": [
         st.Page(ui.tela_redimensionar, title="Redimensionar imagens", icon="📐"),
